@@ -154,6 +154,7 @@ select, input:not([type="file"]):not([type="range"]) {
 .inputs li strong { font-size: 12px; font-weight: 600; }
 .inputs li small { color: var(--muted); font-size: 11px; }
 .inputs li button { flex: none; font-size: 12px; padding: 2px 8px; }
+.hint { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
 .viewer-empty {
   color: var(--muted);
   left: 50%;

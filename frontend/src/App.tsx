@@ -275,8 +275,7 @@ function InputsPanel({ profileId, inputs, onDone, onError }: {
 }) {
   const [busy, setBusy] = useState("");
   const [pages, setPages] = useState("");
-  const drawing = useRef<HTMLInputElement>(null);
-  const model = useRef<HTMLInputElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
 
   const act = async (status: string, action: () => Promise<UpdateResponse>, intro: (update: UpdateResponse) => string) => {
     setBusy(status);
@@ -288,18 +287,20 @@ function InputsPanel({ profileId, inputs, onDone, onError }: {
       onError(e instanceof Error ? e.message : "That didn't work.");
     } finally {
       setBusy("");
-      if (drawing.current) drawing.current.value = "";
-      if (model.current) model.current.value = "";
+      if (picker.current) picker.current.value = "";
     }
   };
 
-  const addDrawing = (file: File | undefined) => {
-    if (file) act("Reading the file.", () => api.upload(profileId, file, pages),
-      (u) => `${file.name} read${u.cached ? " from saved results, at no cost" : ""}. ${u.recorded.length} new fact(s).`);
-  };
-  const addModel = (file: File | undefined) => {
-    if (file) act("Reading the 3D model. A large file can take a minute.", () => api.importModel(profileId, file),
-      (u) => `${file.name} imported: ${u.inputs.model.parts} parts.`);
+  /** One picker for everything: the file's type decides how it's read. */
+  const addFile = (file: File | undefined) => {
+    if (!file) return;
+    if (file.name.toLowerCase().endsWith(".nwd")) {
+      act("Reading the 3D model. A large file can take a minute.", () => api.importModel(profileId, file),
+        (u) => `${file.name} imported: ${u.inputs.model.parts} parts.`);
+    } else {
+      act("Reading the file.", () => api.upload(profileId, file, pages),
+        (u) => `${file.name} read${u.cached ? " from saved results, at no cost" : ""}. ${u.recorded.length} new fact(s).`);
+    }
   };
   const disabled = Boolean(busy);
   const current = inputs?.model;
@@ -344,12 +345,10 @@ function InputsPanel({ profileId, inputs, onDone, onError }: {
           </li>
         )}
       </ul>
-      <label>{current?.active ? "Replace 3D model (.nwd)" : "Import 3D model (.nwd)"}
-        <input ref={model} type="file" accept=".nwd" disabled={disabled} onChange={(e) => addModel(e.target.files?.[0])} />
+      <label>Add a file
+        <input ref={picker} type="file" accept=".nwd,.pdf,.png,.jpg,.jpeg,.webp,.md,.txt" disabled={disabled} onChange={(e) => addFile(e.target.files?.[0])} />
       </label>
-      <label>Add a drawing or document
-        <input ref={drawing} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.md,.txt" disabled={disabled} onChange={(e) => addDrawing(e.target.files?.[0])} />
-      </label>
+      <p className="hint">3D model: .nwd{current?.active ? " (replaces the current one)" : ""}. Drawing or document: PDF, PNG, JPG, WEBP, MD, or TXT.</p>
       <label>PDF pages <input placeholder="All, or like 3,4" value={pages} onChange={(e) => setPages(e.target.value)} /></label>
       {busy && <p className="muted" role="status">{busy}</p>}
     </section>

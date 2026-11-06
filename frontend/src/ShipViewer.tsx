@@ -112,7 +112,7 @@ export default function ShipViewer({ findings, selected, onSelect, measuring, on
         <p className="viewer-empty">
           {modelActive
             ? "This model's parts were read and checked, but a 3D view is only available for the RCRV model."
-            : "No 3D model loaded. Import one under Inputs."}
+            : "No 3D model loaded. Add one under Inputs."}
         </p>
       )}
       <div className="viewer-controls">
