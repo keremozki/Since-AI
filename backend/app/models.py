@@ -93,6 +93,15 @@ class Rule(BaseModel):
     scope: RuleScope = Field(default_factory=RuleScope)
     quote: str = ""
     verified: bool = False
+    # The official text we couldn't get, named in the label on this rule's results.
+    missing_text: str = ""
+
+    def unconfirmed_label(self) -> str:
+        if self.verified:
+            return ""
+        if self.missing_text:
+            return f"Limit not yet confirmed: {self.missing_text} not retrieved"
+        return "Limit not yet confirmed against the rule text"
 
 
 class Finding(BaseModel):
@@ -114,6 +123,7 @@ class Finding(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     location: Point | None = None
     provisional: bool = False
+    unconfirmed_label: str = ""
 
 
 class ScopeDecision(BaseModel):

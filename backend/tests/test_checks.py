@@ -231,6 +231,24 @@ def test_rules_without_a_found_quote_are_provisional():
     assert "not yet confirmed" in report_text(run(FactStore(), rules(), PASSENGER))
 
 
+def test_labels_name_the_rule_text_we_could_not_get():
+    findings = run(FactStore(), rules(), PASSENGER).findings
+    labels = {f.rule_id: f.unconfirmed_label for f in findings}
+    assert labels["SOLAS-III-RAFTS"] == "Limit not yet confirmed: SOLAS III not retrieved"
+    assert labels["SOLAS-V-22"] == "Limit not yet confirmed: SOLAS V/22 not retrieved"
+    assert labels["MSC.1-CIRC.1533"] == "Limit not yet confirmed: MSC.1/Circ.1533 not retrieved"
+    assert labels["COLREG-ANNEX-I"] == ""
+    text = report_text(run(FactStore(), rules(), PASSENGER))
+    assert "Note: Limit not yet confirmed: SOLAS III not retrieved." in text
+
+
+def test_stair_label_names_the_fss_code():
+    part = {"name": "STAIR TREADS INTERIOR 1", "x_in": 0.0, "y_in": 0.0, "z_in": 200.0}
+    findings = run(FactStore(facts_from_parts("model", [part])), rules(), PASSENGER).findings
+    label = next(f.unconfirmed_label for f in findings if f.rule_id == "FSS-13-STAIR")
+    assert label == "Limit not yet confirmed: FSS Code ch. 13 not retrieved"
+
+
 def test_door_and_masthead_limits_are_confirmed_by_the_rule_texts():
     verified = {rule.id for rule in rules() if rule.verified}
     assert verified == {"PVAG-V404.2.3", "COLREG-ANNEX-I"}

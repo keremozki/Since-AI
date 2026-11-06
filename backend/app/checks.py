@@ -26,7 +26,8 @@ LENGTH_TOLERANCE_MM = 10.0
 
 def _finding(rule: Rule, status: Status, subject: str, label: str, **fields) -> Finding:
     return Finding(rule_id=rule.id, rule_title=rule.title, area=rule.area, rule_source=rule.source,
-                   status=status, subject=subject, label=label, provisional=not rule.verified, **fields)
+                   status=status, subject=subject, label=label, provisional=not rule.verified,
+                   unconfirmed_label=rule.unconfirmed_label(), **fields)
 
 
 def _sources(*facts: Fact | None) -> list[str]:

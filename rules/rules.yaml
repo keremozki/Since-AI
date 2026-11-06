@@ -36,6 +36,7 @@ rules:
     area: Escape and evacuation
     source: FSS Code chapter 13
     check: stair_width
+    missing_text: FSS Code ch. 13
     params:
       min_mm: 900
       # Our own margin, not a rule value: a tread longer than the limit by less than
@@ -51,6 +52,7 @@ rules:
     area: Escape and evacuation
     source: IMO MSC.1/Circ.1533
     check: evacuation_time
+    missing_text: MSC.1/Circ.1533
     params:
       max_minutes: 60
       max_minutes_large: 80
@@ -65,6 +67,7 @@ rules:
     area: Lifesaving
     source: SOLAS Chapter III
     check: raft_capacity
+    missing_text: SOLAS III
     params:
       each_side_fraction: 1.0
     scope:
@@ -76,6 +79,7 @@ rules:
     area: Navigation
     source: SOLAS Chapter V, Regulation 22
     check: bridge_visibility
+    missing_text: SOLAS V/22
     params:
       max_ship_lengths: 2
       max_metres: 500

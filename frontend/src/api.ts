@@ -25,6 +25,7 @@ export interface Finding {
   assumptions: string[];
   location: Point | null;
   provisional: boolean;
+  unconfirmed_label: string;
 }
 
 export interface ScopeDecision {

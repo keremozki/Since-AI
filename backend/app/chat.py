@@ -44,6 +44,8 @@ def results_context(result: RunResult) -> str:
                 line += f" | {name}: {value}"
         if finding.assumptions:
             line += " | assumptions: " + " ".join(finding.assumptions)
+        if finding.unconfirmed_label:
+            line += f" | {finding.unconfirmed_label}"
         lines.append(line)
     passed = [f.label for f in result.findings if f.status == Status.PASS]
     lines.append(f"Passed ({len(passed)}): " + ", ".join(passed))

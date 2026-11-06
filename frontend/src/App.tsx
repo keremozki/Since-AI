@@ -133,7 +133,7 @@ function Results({ result, selected, onSelect, filter, onFilter }: {
                   <button type="button" className={on ? "finding on" : "finding"} onClick={() => onSelect(finding)}>
                     <strong>{finding.label}</strong>
                     <span>{finding.measured}{finding.gap ? `: ${finding.gap}` : ""}</span>
-                    <small>{finding.rule_source}{finding.provisional ? " (limit not yet confirmed)" : ""}</small>
+                    <small>{finding.unconfirmed_label || finding.rule_source}</small>
                   </button>
                 </li>
               );
@@ -183,7 +183,7 @@ function FindingDetail({ finding }: { finding: Finding }) {
       <dl>
         {rows.filter(([, value]) => value).map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
         {finding.assumptions.map((text) => <div key={text}><dt>Assumption</dt><dd>{text}</dd></div>)}
-        {finding.provisional && <div><dt>Note</dt><dd>This limit isn't confirmed against the rule text yet.</dd></div>}
+        {finding.unconfirmed_label && <div><dt>Note</dt><dd>{finding.unconfirmed_label}</dd></div>}
       </dl>
     </section>
   );

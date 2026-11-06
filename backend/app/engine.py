@@ -72,8 +72,8 @@ def report_text(result: RunResult) -> str:
                 lines.append(f"  Needed: {finding.question}")
             for assumption in finding.assumptions:
                 lines.append(f"  Assumption: {assumption}")
-            if finding.provisional:
-                lines.append("  Note: limit not yet confirmed against the rule text.")
+            if finding.unconfirmed_label:
+                lines.append(f"  Note: {finding.unconfirmed_label}.")
             lines.append(f"  Source: {'; '.join(finding.sources) or 'none'}")
     out_of_scope = [d for d in result.scope if not d.applies]
     if out_of_scope:
