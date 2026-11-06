@@ -1,0 +1,86 @@
+# Rule library. Code applies these limits; AI never decides a result.
+#
+# A rule counts as verified only when its `quote` is found word for word in the
+# rule texts under docs/rules/. Until then its findings are marked provisional.
+# The limits below come from the team's concept note and must be confirmed against
+# the rule texts.
+#
+# Every `scope` is checked against the ship profile before the rule runs.
+
+rules:
+  - id: ADA-404.2.3
+    title: Accessible door clear width
+    area: Accessibility
+    source: ADA Standards 404.2.3 (2010)
+    check: door_clear_width
+    params:
+      min_in: 32
+      min_mm: 815
+    scope:
+      ship_types: [passenger]
+      reason: Passenger vessels need accessible routes.
+    quote: ""
+
+  - id: FSS-13-STAIR
+    title: Escape stair clear width
+    area: Escape and evacuation
+    source: FSS Code chapter 13
+    check: stair_width
+    params:
+      min_mm: 900
+      # Our own margin, not a rule value: a tread longer than the limit by less than
+      # this might still be narrower than the limit once handrails are fitted.
+      handrail_allowance_mm: 100
+    scope:
+      ship_types: [passenger]
+      reason: Passenger ship escape stairs have a minimum clear width.
+    quote: ""
+
+  - id: MSC.1-CIRC.1533
+    title: Evacuation time
+    area: Escape and evacuation
+    source: IMO MSC.1/Circ.1533
+    check: evacuation_time
+    params:
+      max_minutes: 60
+      max_minutes_large: 80
+      large_zone_count: 3
+    scope:
+      ship_types: [passenger]
+      reason: Passenger ships need an evacuation analysis.
+    quote: ""
+
+  - id: SOLAS-III-RAFTS
+    title: Survival craft capacity
+    area: Lifesaving
+    source: SOLAS Chapter III
+    check: raft_capacity
+    params:
+      each_side_fraction: 1.0
+    scope:
+      reason: Survival craft capacity applies to every ship with a SOLAS certificate.
+    quote: ""
+
+  - id: SOLAS-V-22
+    title: Bridge visibility
+    area: Navigation
+    source: SOLAS Chapter V, Regulation 22
+    check: bridge_visibility
+    params:
+      max_ship_lengths: 2
+      max_metres: 500
+    scope:
+      reason: Bridge visibility applies to every ship with a SOLAS certificate.
+    quote: ""
+
+  - id: COLREG-ANNEX-I
+    title: Masthead light height
+    area: Navigation
+    source: COLREG Annex I, Section 2
+    check: masthead_height
+    params:
+      min_m: 6
+      cap_m: 12
+    scope:
+      reason: COLREG applies to every ship at sea.
+    quote: ""
