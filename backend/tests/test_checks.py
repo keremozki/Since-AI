@@ -198,7 +198,7 @@ def rules():
 def test_scope_excludes_passenger_rules_for_the_research_vessel():
     result = run(FactStore(), rules(), PROFILES["rcrv"])
     excluded = {d.rule_id for d in result.scope if not d.applies}
-    assert excluded == {"ADA-404.2.3", "FSS-13-STAIR", "MSC.1-CIRC.1533"}
+    assert excluded == {"PVAG-V404.2.3", "FSS-13-STAIR", "MSC.1-CIRC.1533"}
     assert not any(f.rule_id in excluded for f in result.findings)
 
 
@@ -226,9 +226,30 @@ def test_conflict_between_sources_is_flagged():
 
 def test_rules_without_a_found_quote_are_provisional():
     assert all(not rule.verified for rule in rules() if not rule.quote)
-    finding = run(FactStore(), rules(), PASSENGER).findings[0]
-    assert finding.provisional
+    findings = run(FactStore(), rules(), PASSENGER).findings
+    assert any(f.provisional for f in findings)
     assert "not yet confirmed" in report_text(run(FactStore(), rules(), PASSENGER))
+
+
+def test_door_and_masthead_limits_are_confirmed_by_the_rule_texts():
+    verified = {rule.id for rule in rules() if rule.verified}
+    assert verified == {"PVAG-V404.2.3", "COLREG-ANNEX-I"}
+
+
+def test_narrow_door_to_a_stairway_is_cant_tell_under_the_exception():
+    rule = DOOR_RULE.model_copy(update={"params": {**DOOR_RULE.params, "stairway_door_exception": True}})
+    part = door_part("A-CLASS DOOR (RI)-542", "CLEAR OPENING 30x78")
+    part["compartment"] = "STAIRWAY 2-24-0"
+    finding = check_door_clear_width(rule, FactStore(facts_from_parts("model", [part])), PASSENGER)[0]
+    assert finding.status == Status.CANT_TELL
+    assert "administrative authority" in finding.question
+
+
+def test_narrow_door_elsewhere_still_fails_under_the_exception():
+    rule = DOOR_RULE.model_copy(update={"params": {**DOOR_RULE.params, "stairway_door_exception": True}})
+    part = door_part("A-CLASS DOOR (RI)-542", "CLEAR OPENING 30x78")
+    part["compartment"] = "GALLEY 1-18-1"
+    assert check_door_clear_width(rule, FactStore(facts_from_parts("model", [part])), PASSENGER)[0].status == Status.FAIL
 
 
 def test_a_quote_found_in_the_rule_text_verifies_the_rule(tmp_path):

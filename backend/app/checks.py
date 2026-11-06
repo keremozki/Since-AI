@@ -103,10 +103,10 @@ def door_number_conflicts(store: FactStore) -> dict[str, list[Fact]]:
 def check_door_clear_width(rule: Rule, store: FactStore, profile: ShipProfile) -> list[Finding]:
     min_in, min_mm = float(rule.params["min_in"]), float(rule.params["min_mm"])
     required = f"At least {min_in:g} in ({min_mm:g} mm) clear width"
-    assumptions = []
+    assumptions = ["Opening depth isn't stated. Openings more than 24 in deep need 36 in, which this doesn't test."]
     if profile.accessible_route_all_passage_doors:
         assumptions.append("Every passage door is treated as on an accessible route. The model doesn't mark routes.")
-    why = "The door is treated as on an accessible route." if assumptions else "The door is on an accessible route."
+    why = "The door is treated as on an accessible route."
     conflicts = door_number_conflicts(store)
     findings: list[Finding] = []
     missing: dict[str, list[str]] = defaultdict(list)
@@ -133,11 +133,18 @@ def check_door_clear_width(rule: Rule, store: FactStore, profile: ShipProfile) -
         if passed and width_mm < min_mm:
             door_assumptions.append(f"Meets {min_in:g} in, but is under the rule's rounded {min_mm:g} mm figure. The inch value is used.")
         gap = "" if passed else f"{(limit_mm - width_mm) / 25.4:.1f} in ({limit_mm - width_mm:.0f} mm) short"
+        compartment = store.one(subject, "compartment")
+        status, question = Status.PASS if passed else Status.FAIL, ""
+        if (not passed and rule.params.get("stairway_door_exception") and compartment
+                and "STAIR" in str(compartment.value).upper()):
+            # The rule lets this door follow another authority's limit, which we don't have.
+            status = Status.CANT_TELL
+            question = f"This door leads to a stairway, so the rule defers to the administrative authority. What width does it require for {label}?"
         findings.append(_finding(
-            rule, Status.PASS if passed else Status.FAIL, subject, label,
+            rule, status, subject, label,
             where=str(deck.value) if deck else "", measured=f"{fmt_length(float(width.value), width.unit)} clear width",
-            required=required, gap=gap, why=why, sources=_sources(width), location=width.location,
-            confidence="medium" if door_assumptions else "high", assumptions=door_assumptions))
+            required=required, gap=gap if status == Status.FAIL else "", why=why, sources=_sources(width), location=width.location,
+            confidence="medium", assumptions=door_assumptions, question=question))
     for number, widths in sorted(conflicts.items()):
         findings.append(_finding(
             rule, Status.CONFLICT, f"door-number:{number}", f"Door {number}",
@@ -301,7 +308,7 @@ def check_masthead_height(rule: Rule, store: FactStore, profile: ShipProfile) ->
         heights = ", ".join(f"{l.value:g}" for l in sorted(lights, key=lambda f: f.value))
         needs = []
         if height is None:
-            needs.append("Which light is the forward masthead light, and how high is it above the hull?")
+            needs.append("Which light is the forward masthead light, and how high is it above the uppermost continuous deck, measured vertically beneath the light?")
         if beam is None:
             needs.append("What is the ship's beam?")
         return [_finding(rule, Status.CANT_TELL, "masthead_forward", label,

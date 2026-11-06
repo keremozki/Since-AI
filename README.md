@@ -76,6 +76,12 @@ hand-checked door set, faults seeded one at a time, and a run with all dimension
 
 ## Known limits
 
+- Rule texts in `docs/rules/` cover COLREG, PVAG, and ADA. SOLAS, the FSS Code, and MSC.1/Circ.1533 aren't
+  there yet, so those limits are still provisional. DNV rules couldn't be retrieved.
+- The door check uses PVAG V404.2.3, which is a proposed rule, not in force. ADA 404.2.3 sets the same limit,
+  but the ADA Standards don't state that they apply to vessels.
+- The door check doesn't test the 36 in limit for openings more than 24 in deep, because the model doesn't
+  state opening depth.
 - The hand-checked set was typed from the model's own description text, so it tests our parsing and
   logic, not whether the model itself is right. An engineer should spot-check it against the drawings.
 - The RCRV is a research vessel, so passenger ship rules don't apply to it. The "passenger test" profile

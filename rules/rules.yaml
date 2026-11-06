@@ -2,24 +2,34 @@
 #
 # A rule counts as verified only when its `quote` is found word for word in the
 # rule texts under docs/rules/. Until then its findings are marked provisional.
-# The limits below come from the team's concept note and must be confirmed against
-# the rule texts.
+#
+# SOLAS, the FSS Code, and MSC.1/Circ.1533 aren't in docs/rules yet, so those limits
+# come from the team's concept note and stay provisional.
 #
 # Every `scope` is checked against the ship profile before the rule runs.
 
 rules:
-  - id: ADA-404.2.3
+  # PVAG, not ADA: PVAG is written for passenger vessels, while the ADA Standards don't state
+  # that they apply to vessels. ADA 404.2.3 sets the same 32 in limit.
+  - id: PVAG-V404.2.3
     title: Accessible door clear width
     area: Accessibility
-    source: ADA Standards 404.2.3 (2010)
+    source: PVAG V404.2.3 (proposed, not in force)
     check: door_clear_width
     params:
       min_in: 32
       min_mm: 815
+      # V404.2.3 exception 3: doors to stairways may follow the administrative authority instead.
+      stairway_door_exception: true
     scope:
       ship_types: [passenger]
-      reason: Passenger vessels need accessible routes.
-    quote: ""
+      min_passengers: 150
+      reason: PVAG V201.1.1 covers passenger vessels permitted to carry more than 150 passengers.
+    quote: >-
+      Door openings shall provide a clear width of 32 inches (815 mm) minimum. Clear openings of doorways
+      with swinging doors shall be measured between the face of the door and the stop, with the door open
+      90 degrees. Openings more than 24 inches (610 mm) deep shall provide a clear opening of 36 inches
+      (915 mm) minimum.
 
   - id: FSS-13-STAIR
     title: Escape stair clear width
@@ -76,11 +86,15 @@ rules:
   - id: COLREG-ANNEX-I
     title: Masthead light height
     area: Navigation
-    source: COLREG Annex I, Section 2
+    source: COLREG Annex I, Section 2(a)(i)
     check: masthead_height
     params:
       min_m: 6
       cap_m: 12
     scope:
-      reason: COLREG applies to every ship at sea.
-    quote: ""
+      reason: Annex I 2(a) covers power-driven vessels of 20 meters or more in length.
+    quote: >-
+      the forward masthead light, or if only one masthead light is carried, then that light, at a height
+      above the hull of not less than 6 meters, and, if the breadth of the vessel exceeds 6 meters, then at
+      a height above the hull not less than such breadth, so however that the light need not be placed at a
+      greater height above the hull than 12 meters;

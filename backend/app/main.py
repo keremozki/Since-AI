@@ -40,6 +40,8 @@ class AppState:
         self.ledger = Ledger(data_dir / "usage.json", float(os.environ.get("BUDGET_USD", DEFAULT_CAP_USD)))
         self.claude = claude or Claude(self.ledger)
         self.history: list[dict] = []
+        # Checking quotes means reading every rule text, so do it once at startup.
+        self.rules = load_rules(rules_file, rule_texts_dir)
 
     def add_facts(self, facts: list[Fact]) -> None:
         self.added.extend(facts)
@@ -55,7 +57,7 @@ class AppState:
         if profile is None:
             raise HTTPException(404, f"Unknown ship profile: {profile_id}")
         facts = self.model_facts + self.added + (demo_faults() if profile.use_demo_faults else [])
-        return run(FactStore(facts), load_rules(self.rules_file, self.rule_texts_dir), profile)
+        return run(FactStore(facts), self.rules, profile)
 
 
 class ChatRequest(BaseModel):

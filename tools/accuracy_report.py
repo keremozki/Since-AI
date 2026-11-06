@@ -26,7 +26,7 @@ from app.profiles import PASSENGER_TEST  # noqa: E402
 from app.rules import load_rules  # noqa: E402
 from app.store import FactStore  # noqa: E402
 
-DOOR_RULE, STAIR_RULE = "ADA-404.2.3", "FSS-13-STAIR"
+DOOR_RULE, STAIR_RULE = "PVAG-V404.2.3", "FSS-13-STAIR"
 # Door number: expected result against 32 in, typed from the model's description text.
 HAND_CHECKED = {
     "212": "pass", "317": "pass", "504": "pass", "509": "fail", "310": "fail", "506": "pass", "510": "pass",
@@ -36,7 +36,9 @@ HAND_CHECKED = {
 }
 OPENING = re.compile(r"((?:CLEAR\w*|LIGHT)\s+OPEN\w*\s*)[\d.]+", re.I)
 TREAD_LENGTH = re.compile(r'\d+(\s*"\s*L)', re.I)
-CAUGHT = {Status.FAIL, Status.CONFLICT}
+# Anything but a pass counts as caught. A too-narrow stairway door is "can't tell", because PVAG
+# defers its limit to the administrative authority.
+CAUGHT = {Status.FAIL, Status.CONFLICT, Status.CANT_TELL}
 
 
 def findings_for(parts, source, rules):

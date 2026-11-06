@@ -164,7 +164,7 @@ function Scoreboard() {
       <h2>How we test the checks</h2>
       <ul className="scope">
         <li><strong>Hand-checked doors:</strong> {hand.correct} of {hand.total} correct, {hand.false_passes} false passes, {hand.false_fails} false fails.</li>
-        <li><strong>Seeded faults:</strong> {doors.caught + stairs.caught} of {doors.faults + stairs.faults} caught, one at a time on the real data.</li>
+        <li><strong>Seeded faults:</strong> {doors.caught + stairs.caught} of {doors.faults + stairs.faults} flagged, one at a time on the real data.</li>
         <li><strong>Missing data:</strong> {missing.false_passes} false passes across {missing.checks} checks with all dimensions removed.</li>
       </ul>
     </div>
