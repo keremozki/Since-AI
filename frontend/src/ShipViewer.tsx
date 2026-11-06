@@ -67,12 +67,15 @@ interface Props {
   onSelect: (finding: Finding) => void;
   measuring: boolean;
   onMeasured: (measurement: Measurement | null) => void;
+  /** Whether to show the ship's geometry. Null until the app knows. */
+  modelVisible: boolean | null;
+  modelActive: boolean;
 }
 
-export default function ShipViewer({ findings, selected, onSelect, measuring, onMeasured }: Props) {
+export default function ShipViewer({ findings, selected, onSelect, measuring, onMeasured, modelVisible, modelActive }: Props) {
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<ViewerCore | null>(null);
-  const [status, setStatus] = useState("Loading the 3D model");
+  const [status, setStatus] = useState("");
   const [cut, setCut] = useState(FULL_CUT);
   const callbacks = useRef({ onSelect, onMeasured });
   callbacks.current = { onSelect, onMeasured };
@@ -84,10 +87,10 @@ export default function ShipViewer({ findings, selected, onSelect, measuring, on
       status: setStatus,
     });
     view.current = core;
-    core.load();
     return () => core.dispose();
   }, []);
 
+  useEffect(() => { if (modelVisible !== null) view.current?.setModelVisible(modelVisible); }, [modelVisible]);
   useEffect(() => view.current?.setMarkers(findings), [findings]);
   useEffect(() => view.current?.setMeasuring(measuring), [measuring]);
   useEffect(() => view.current?.setCut(cut), [cut]);
@@ -105,6 +108,13 @@ export default function ShipViewer({ findings, selected, onSelect, measuring, on
     <section className="viewer" aria-label="3D model of the ship">
       <div ref={mount} className="viewer-canvas" data-measuring={measuring} />
       {status && <p className="viewer-status">{status}</p>}
+      {modelVisible === false && (
+        <p className="viewer-empty">
+          {modelActive
+            ? "This model's parts were read and checked, but a 3D view is only available for the RCRV model."
+            : "No 3D model loaded. Import one under Inputs."}
+        </p>
+      )}
       <div className="viewer-controls">
         <label>
           Cut height
@@ -130,6 +140,9 @@ class ViewerCore {
   private meta: ModelMeta | null = null;
   private geometries: { name: string; geometry: THREE.BufferGeometry }[] = [];
   private measuring = false;
+  private meshes: THREE.Mesh[] = [];
+  private modelVisible = false;
+  private loadStarted = false;
   private points: THREE.Vector3[] = [];
   private flight: { from: THREE.Vector3; to: THREE.Vector3; fromT: THREE.Vector3; toT: THREE.Vector3; start: number } | null = null;
   private frame = 0;
@@ -175,7 +188,18 @@ class ViewerCore {
     (window as unknown as { __viewer: ViewerCore }).__viewer = this;
   }
 
-  async load() {
+  /** The decoded model stays in memory while hidden, so that restoring it is instant. */
+  setModelVisible(visible: boolean) {
+    this.modelVisible = visible;
+    if (visible && !this.loadStarted) {
+      this.loadStarted = true;
+      this.events.status("Loading the 3D model");
+      this.load();
+    }
+    for (const mesh of this.meshes) mesh.visible = visible && mesh.userData.category !== "Insulation";
+  }
+
+  private async load() {
     try {
       const [meta, bytes] = await Promise.all([
         fetch("/model/meta").then((r) => { if (!r.ok) throw new Error("no model"); return r.json() as Promise<ModelMeta>; }),
@@ -215,7 +239,9 @@ class ViewerCore {
         mesh.frustumCulled = false;
         mesh.scale.setScalar(meta.q);
         mesh.position.set(meta.ox, meta.oy, meta.oz);
-        mesh.visible = category.name !== "Insulation";
+        mesh.userData.category = category.name;
+        mesh.visible = this.modelVisible && category.name !== "Insulation";
+        this.meshes.push(mesh);
         this.scene.add(mesh);
         this.geometries.push({ name: category.name, geometry });
       }
@@ -325,7 +351,7 @@ class ViewerCore {
     const ray = new THREE.Raycaster();
     ray.setFromCamera(pointer, this.camera);
     if (this.measuring) {
-      this.pickPoint(ray);
+      if (this.modelVisible) this.pickPoint(ray);
       return;
     }
     const hit = ray.intersectObjects(this.markers.children)[0];

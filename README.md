@@ -59,6 +59,17 @@ cd backend
 
 Open http://127.0.0.1:8000. The checks work with no API key, but chat and drawing reading need one.
 
+## Managing inputs
+
+The Inputs panel lists the 3D model, each drawing or document, saved measurements, and chat answers. Each
+can be removed, and the checks rerun at once. The app holds one 3D model at a time.
+
+- Removing the 3D model keeps its files on disk, so Restore brings it back at once. Its measurements stop
+  counting until then.
+- Importing a different `.nwd` replaces the current model and deletes measurements taken on the old one.
+- A removed drawing can be added again at no cost, because its facts are cached.
+- The 3D view exists only for the RCRV. Other models are checked, but aren't shown in the viewer.
+
 ## Spending cap
 
 AI calls stop at `BUDGET_USD` (default $4.00), tracked in `ship-data/usage.json`. Facts read from a file

@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Accuracy, api, Finding, MeasureTarget, Profile, RunResult, Spend, Status, UpdateResponse } from "./api";
+import { Accuracy, api, Finding, Inputs, MeasureTarget, Profile, RunResult, Spend, Status, UpdateResponse } from "./api";
 import ShipViewer, { Measurement, STATUS_COLOR } from "./ShipViewer";
 
 const STATUS_ORDER: Status[] = ["fail", "conflict", "cant_tell", "pass"];
@@ -23,13 +23,15 @@ export default function App() {
   const [lines, setLines] = useState<ChatLine[]>([]);
   const [measuring, setMeasuring] = useState(false);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
+  const [inputs, setInputs] = useState<Inputs | null>(null);
 
   const refresh = useCallback(async (id: string) => {
     setError("");
     try {
-      const { result: next, spend: nextSpend } = await api.run(id);
+      const [{ result: next, spend: nextSpend }, nextInputs] = await Promise.all([api.run(id), api.inputs()]);
       setResult(next);
       setSpend(nextSpend);
+      setInputs(nextInputs);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The checks couldn't run.");
     }
@@ -41,6 +43,9 @@ export default function App() {
   const applyUpdate = useCallback((update: UpdateResponse, intro: string) => {
     setResult(update.result);
     setSpend(update.spend);
+    setInputs(update.inputs);
+    // The selected result may no longer exist, so look it up again.
+    setSelected((current) => current && (update.result.findings.find((f) => f.rule_id === current.rule_id && f.subject === current.subject) ?? null));
     const notes: ChatLine[] = [];
     if (update.reply) notes.push({ role: "assistant", text: update.reply });
     if (intro) notes.push({ role: "system", text: intro });
@@ -57,6 +62,7 @@ export default function App() {
     await api.reset();
     setLines([]);
     setMeasurement(null);
+    setMeasuring(false);
     setSelected(null);
     refresh(profileId);
   };
@@ -81,13 +87,14 @@ export default function App() {
       <main className="layout">
         <Results result={result} selected={selected} onSelect={setSelected} filter={filter} onFilter={setFilter} />
         <div className="middle">
-          <ShipViewer findings={result?.findings ?? []} selected={selected} onSelect={setSelected} measuring={measuring} onMeasured={setMeasurement} />
+          <ShipViewer findings={result?.findings ?? []} selected={selected} onSelect={setSelected} measuring={measuring}
+            onMeasured={setMeasurement} modelVisible={inputs?.model.has_view ?? null} modelActive={inputs?.model.active ?? true} />
           {selected && <FindingDetail finding={selected} />}
         </div>
         <aside className="side">
+          <InputsPanel profileId={profileId} inputs={inputs} onDone={(update, intro) => { setMeasuring(false); applyUpdate(update, intro); }} onError={setError} />
           <MeasurePanel profileId={profileId} measuring={measuring} onToggle={setMeasuring} measurement={measurement}
-            onSaved={(u) => applyUpdate(u, "Measurement saved.")} onError={setError} />
-          <UploadPanel profileId={profileId} onDone={applyUpdate} onError={setError} />
+            available={inputs?.model.has_view ?? false} onSaved={(u) => applyUpdate(u, "Measurement saved.")} onError={setError} />
           <Chat profileId={profileId} lines={lines} setLines={setLines} onDone={applyUpdate} />
         </aside>
       </main>
@@ -196,11 +203,12 @@ function distance(m: Measurement, direction: Direction): number {
   return Math.hypot(dx, dy, dz);
 }
 
-function MeasurePanel({ profileId, measuring, onToggle, measurement, onSaved, onError }: {
+function MeasurePanel({ profileId, measuring, onToggle, measurement, available, onSaved, onError }: {
   profileId: string;
   measuring: boolean;
   onToggle: (on: boolean) => void;
   measurement: Measurement | null;
+  available: boolean;
   onSaved: (update: UpdateResponse) => void;
   onError: (text: string) => void;
 }) {
@@ -233,7 +241,8 @@ function MeasurePanel({ profileId, measuring, onToggle, measurement, onSaved, on
   return (
     <section className="panel">
       <h2>Measure in 3D</h2>
-      <button type="button" aria-pressed={measuring} onClick={() => onToggle(!measuring)}>{measuring ? "Stop measuring" : "Start measuring"}</button>
+      <button type="button" disabled={!available} aria-pressed={measuring} onClick={() => onToggle(!measuring)}>{measuring ? "Stop measuring" : "Start measuring"}</button>
+      {!available && <p className="muted">Needs a 3D model with a 3D view.</p>}
       {measuring && !measurement && <p className="muted">Click two points on the model. Use the cut height to see inside.</p>}
       {measurement && (
         <div className="measure-form">
@@ -258,33 +267,91 @@ function MeasurePanel({ profileId, measuring, onToggle, measurement, onSaved, on
   );
 }
 
-function UploadPanel({ profileId, onDone, onError }: {
+function InputsPanel({ profileId, inputs, onDone, onError }: {
   profileId: string;
+  inputs: Inputs | null;
   onDone: (update: UpdateResponse, intro: string) => void;
   onError: (text: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
   const [pages, setPages] = useState("");
-  const input = useRef<HTMLInputElement>(null);
-  const send = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
+  const drawing = useRef<HTMLInputElement>(null);
+  const model = useRef<HTMLInputElement>(null);
+
+  const act = async (status: string, action: () => Promise<UpdateResponse>, intro: (update: UpdateResponse) => string) => {
+    setBusy(status);
+    onError("");
     try {
-      const update = await api.upload(profileId, file, pages);
-      onDone(update, `${file.name} read${update.cached ? " from saved results, at no cost" : ""}. ${update.recorded.length} new fact(s).`);
+      const update = await action();
+      onDone(update, intro(update));
     } catch (e) {
-      onError(e instanceof Error ? e.message : "The file couldn't be read.");
+      onError(e instanceof Error ? e.message : "That didn't work.");
     } finally {
-      setBusy(false);
-      if (input.current) input.current.value = "";
+      setBusy("");
+      if (drawing.current) drawing.current.value = "";
+      if (model.current) model.current.value = "";
     }
   };
+
+  const addDrawing = (file: File | undefined) => {
+    if (file) act("Reading the file.", () => api.upload(profileId, file, pages),
+      (u) => `${file.name} read${u.cached ? " from saved results, at no cost" : ""}. ${u.recorded.length} new fact(s).`);
+  };
+  const addModel = (file: File | undefined) => {
+    if (file) act("Reading the 3D model. A large file can take a minute.", () => api.importModel(profileId, file),
+      (u) => `${file.name} imported: ${u.inputs.model.parts} parts.`);
+  };
+  const disabled = Boolean(busy);
+  const current = inputs?.model;
+
   return (
-    <section className="panel">
-      <h2>Add a drawing or document</h2>
-      <input ref={input} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.md,.txt" disabled={busy} onChange={(e) => send(e.target.files?.[0])} />
+    <section className="panel inputs">
+      <h2>Inputs</h2>
+      <ul>
+        {current?.active && (
+          <li>
+            <span><strong>{current.name}</strong><small>3D model, {current.parts} parts{current.has_view ? "" : ", no 3D view"}</small></span>
+            <button type="button" disabled={disabled} aria-label={`Remove ${current.name}`}
+              onClick={() => act("Removing the model.", () => api.removeModel(profileId), () => `${current.name} removed.`)}>Remove</button>
+          </li>
+        )}
+        {current && !current.active && (
+          <li>
+            <span><strong>No 3D model</strong>{current.restorable && <small>The removed model can be restored.</small>}</span>
+            {current.restorable && <button type="button" disabled={disabled}
+              onClick={() => act("Restoring the model.", () => api.restoreModel(profileId), (u) => `${u.inputs.model.name} restored.`)}>Restore</button>}
+          </li>
+        )}
+        {inputs?.files.map((file) => (
+          <li key={file.name}>
+            <span><strong>{file.name}</strong><small>{file.facts} fact(s) read</small></span>
+            <button type="button" disabled={disabled} aria-label={`Remove ${file.name}`}
+              onClick={() => act("Removing the file.", () => api.removeFile(profileId, file.name), () => `${file.name} removed.`)}>Remove</button>
+          </li>
+        ))}
+        {Boolean(inputs?.measurements) && (
+          <li>
+            <span><strong>3D measurements</strong><small>{inputs!.measurements} saved</small></span>
+            <button type="button" disabled={disabled} aria-label="Remove 3D measurements"
+              onClick={() => act("Removing the measurements.", () => api.removeGroup(profileId, "measurements"), () => "3D measurements removed.")}>Remove</button>
+          </li>
+        )}
+        {Boolean(inputs?.chat) && (
+          <li>
+            <span><strong>Chat answers</strong><small>{inputs!.chat} fact(s) recorded</small></span>
+            <button type="button" disabled={disabled} aria-label="Remove chat answers"
+              onClick={() => act("Removing the chat answers.", () => api.removeGroup(profileId, "chat"), () => "Chat answers removed.")}>Remove</button>
+          </li>
+        )}
+      </ul>
+      <label>{current?.active ? "Replace 3D model (.nwd)" : "Import 3D model (.nwd)"}
+        <input ref={model} type="file" accept=".nwd" disabled={disabled} onChange={(e) => addModel(e.target.files?.[0])} />
+      </label>
+      <label>Add a drawing or document
+        <input ref={drawing} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.md,.txt" disabled={disabled} onChange={(e) => addDrawing(e.target.files?.[0])} />
+      </label>
       <label>PDF pages <input placeholder="All, or like 3,4" value={pages} onChange={(e) => setPages(e.target.value)} /></label>
-      {busy && <p className="muted">Reading the file.</p>}
+      {busy && <p className="muted" role="status">{busy}</p>}
     </section>
   );
 }

@@ -110,6 +110,9 @@ def check_door_clear_width(rule: Rule, store: FactStore, profile: ShipProfile) -
     why = "The door is treated as on an accessible route."
     conflicts = door_number_conflicts(store)
     findings: list[Finding] = []
+    if not store.subjects("door:") and not store.subjects("door-number:"):
+        return [_finding(rule, Status.CANT_TELL, "doors", "Doors", measured="No doors in the design data",
+                         required=required, why=why, question="Add a 3D model or a drawing that shows the doors.")]
     missing: dict[str, list[str]] = defaultdict(list)
     for subject in store.subjects("door:"):
         kind = store.one(subject, "kind")
@@ -169,6 +172,10 @@ def check_stair_width(rule: Rule, store: FactStore, profile: ShipProfile) -> lis
     assumptions = ["Every stair with treads in the model is treated as an escape stair.",
                    f"Width is read from tread length. A pass needs {allowance:g} mm extra to allow for handrails."]
     findings: list[Finding] = []
+    if not store.subjects("stair:"):
+        return [_finding(rule, Status.CANT_TELL, "stairs", "Stairs", measured="No stairs in the design data",
+                         required=required, why="Passenger ship escape stairs have a minimum clear width.",
+                         question="Add a 3D model that shows the stairs.")]
     for subject in store.subjects("stair:"):
         name, deck = store.one(subject, "name"), store.one(subject, "deck")
         tread = store.one(subject, "tread_length")
@@ -225,7 +232,12 @@ def check_raft_capacity(rule: Rule, store: FactStore, profile: ShipProfile) -> l
         rafts_by_side[str(side.value)] += float(count.value)
         first_rack.setdefault(str(side.value), count)
     required = f"Capacity on each side of at least {fraction:.0%} of persons on board"
-    racks = ", ".join(f"{n:g} rafts on {side}" for side, n in sorted(rafts_by_side.items())) or "none found"
+    racks = ", ".join(f"{n:g} rafts on {side}" for side, n in sorted(rafts_by_side.items()))
+    if not rafts_by_side:
+        # No racks means no data, not a ship without rafts, so this can't be a fail.
+        return [_finding(rule, Status.CANT_TELL, "liferaft", label, measured="No liferaft racks in the design data",
+                         required=required, why="Survival craft capacity must cover everyone on board.",
+                         sources=_sources(persons, capacity), question="Add a 3D model that shows the liferaft racks.")]
     if persons is None or capacity is None:
         needs = []
         if persons is None:
@@ -307,13 +319,15 @@ def check_masthead_height(rule: Rule, store: FactStore, profile: ShipProfile) ->
     if height is None or beam is None:
         lights = [store.one(s, "height_above_baseline") for s in store.subjects("nav_light:")]
         heights = ", ".join(f"{l.value:g}" for l in sorted(lights, key=lambda f: f.value))
+        found = (f"The model has {len(lights)} navigation lights, not labelled by role, at {heights} m above baseline."
+                 if lights else "No navigation lights in the design data")
         needs = []
         if height is None:
             needs.append("Which light is the forward masthead light, and how high is it above the uppermost continuous deck, measured vertically beneath the light?")
         if beam is None:
             needs.append("What is the ship's beam?")
         return [_finding(rule, Status.CANT_TELL, "masthead_forward", label,
-                         measured=f"The model has {len(lights)} navigation lights, not labelled by role, at {heights} m above baseline.",
+                         measured=found,
                          required=f"At least {minimum:g} m, or the beam if larger, up to {cap:g} m", why=why,
                          sources=_sources(*lights[:1]), question=" ".join(needs))]
     beam_m = to_mm(float(beam.value), beam.unit) / 1000

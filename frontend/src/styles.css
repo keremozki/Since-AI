@@ -140,6 +140,30 @@ select, input:not([type="file"]):not([type="range"]) {
 .panel label { display: block; font-size: 12px; margin-top: 6px; }
 .panel label select, .panel label input { display: block; margin-top: 2px; width: 100%; }
 .panel input[type="file"] { max-width: 100%; }
+.inputs ul { list-style: none; margin: 0 0 8px; padding: 0; }
+.inputs li {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+.inputs li > span { min-width: 0; }
+.inputs li strong, .inputs li small { display: block; overflow-wrap: anywhere; }
+.inputs li strong { font-size: 12px; font-weight: 600; }
+.inputs li small { color: var(--muted); font-size: 11px; }
+.inputs li button { flex: none; font-size: 12px; padding: 2px 8px; }
+.viewer-empty {
+  color: var(--muted);
+  left: 50%;
+  margin: 0;
+  max-width: 340px;
+  position: absolute;
+  text-align: center;
+  top: 45%;
+  transform: translateX(-50%);
+}
 .measure-value { font-size: 15px; font-variant-numeric: tabular-nums; font-weight: 600; margin: 6px 0; }
 .measure-form > button { margin-top: 8px; }
 

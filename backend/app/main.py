@@ -1,8 +1,11 @@
 """Web API. Runs locally: nothing here is meant for public hosting."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -11,10 +14,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import chat as chat_module
-from . import ingest
+from . import ingest, nwd
 from .engine import report_text, run
 from .llm import DEFAULT_CAP_USD, BudgetExceeded, Claude, Ledger, ModelRefused, load_env
-from .models import Fact, Point, RunResult, Source, SourceKind
+from .models import Fact, Point, RunResult, Source, SourceKind, Status
 from .parts import facts_from_parts, load_parts
 from .profiles import PROFILES, demo_faults
 from .rules import load_rules
@@ -22,6 +25,14 @@ from .store import FactStore
 from .vocabulary import VOCABULARY
 
 ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PARTS = "parts.json"
+MAX_LISTED_CHANGES = 8
+FILE_KINDS = {SourceKind.DOCUMENT, SourceKind.IMAGE}
+FACT_GROUPS = {"measurements": SourceKind.MEASUREMENT, "chat": SourceKind.CHAT}
+
+
+def _digest(parts: list[dict]) -> str:
+    return hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()[:24]
 
 
 class AppState:
@@ -29,11 +40,16 @@ class AppState:
         self.data_dir = data_dir
         self.rules_file, self.rule_texts_dir = rules_file, rule_texts_dir
         self.added_file = data_dir / "added_facts.json"
-        parts_file = data_dir / "parts.json"
+        self.inputs_file = data_dir / "inputs.json"
+        self.active_model: str | None = None
+        self.last_model: str | None = None
+        self.geometry_for: str | None = None
+        self.files: list[str] = []
+        self._load_inputs()
+        self.model_name, self.model_digest = "", ""
+        self.model_parts = 0
         self.model_facts: list[Fact] = []
-        if parts_file.exists():
-            name, parts = load_parts(parts_file)
-            self.model_facts = facts_from_parts(name, parts)
+        self._load_active_model()
         self.added: list[Fact] = []
         if self.added_file.exists():
             self.added = [Fact(**raw) for raw in json.loads(self.added_file.read_text(encoding="utf-8"))]
@@ -43,20 +59,124 @@ class AppState:
         # Checking quotes means reading every rule text, so do it once at startup.
         self.rules = load_rules(rules_file, rule_texts_dir)
 
-    def add_facts(self, facts: list[Fact]) -> None:
-        self.added.extend(facts)
+    def _load_inputs(self) -> None:
+        if self.inputs_file.exists():
+            saved = json.loads(self.inputs_file.read_text(encoding="utf-8"))
+            self.active_model, self.last_model = saved["active_model"], saved["last_model"]
+            self.geometry_for, self.files = saved["geometry_for"], saved["files"]
+            return
+        # First run: the model set up on disk is active, and the viewer's geometry belongs to it.
+        if (self.data_dir / DEFAULT_PARTS).exists():
+            self.active_model = DEFAULT_PARTS
+            if (self.data_dir / "model.bin").exists():
+                self.geometry_for = _digest(load_parts(self.data_dir / DEFAULT_PARTS)[1])
+
+    def _save_inputs(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.inputs_file.write_text(json.dumps({
+            "active_model": self.active_model, "last_model": self.last_model,
+            "geometry_for": self.geometry_for, "files": self.files}), encoding="utf-8")
+
+    def _load_active_model(self) -> None:
+        self.model_name, self.model_digest, self.model_parts, self.model_facts = "", "", 0, []
+        if self.active_model is None:
+            return
+        name, parts = load_parts(self.data_dir / self.active_model)
+        self.model_name, self.model_digest, self.model_parts = name, _digest(parts), len(parts)
+        self.model_facts = facts_from_parts(name, parts)
+
+    def _save_added(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.added_file.write_text(json.dumps([f.model_dump(mode="json") for f in self.added]), encoding="utf-8")
 
+    def add_facts(self, facts: list[Fact]) -> None:
+        self.added.extend(facts)
+        self._save_added()
+
+    def add_file(self, name: str) -> None:
+        if name not in self.files:
+            self.files.append(name)
+            self._save_inputs()
+
+    def remove_file(self, name: str) -> bool:
+        found = name in self.file_names()
+        self.added = [f for f in self.added if not (f.source.kind in FILE_KINDS and f.source.file == name)]
+        self.files = [known for known in self.files if known != name]
+        self._save_added()
+        self._save_inputs()
+        return found
+
+    def remove_group(self, kind: SourceKind) -> None:
+        self.added = [f for f in self.added if f.source.kind != kind]
+        self._save_added()
+
+    def remove_model(self) -> None:
+        """The files stay on disk, so the model can be restored without reading it again."""
+        if self.active_model is not None:
+            self.last_model, self.active_model = self.active_model, None
+            self._save_inputs()
+            self._load_active_model()
+
+    def restore_model(self) -> None:
+        if self.active_model is None and self.last_model is not None:
+            self.active_model = self.last_model
+            self._save_inputs()
+            self._load_active_model()
+
+    def import_model(self, path: Path, name: str) -> None:
+        """Replace the active model. Measurements belong to a model, so a different ship drops them."""
+        parts = nwd.decode(path)
+        if not parts:
+            raise ValueError(f"No named parts could be read from {name}. The file may be a format we don't support.")
+        digest = _digest(parts)
+        previous = self.model_digest or self._last_model_digest()
+        stored = Path("models") / f"{digest}.json"
+        (self.data_dir / "models").mkdir(parents=True, exist_ok=True)
+        (self.data_dir / stored).write_text(json.dumps({"source": name, "parts": parts}), encoding="utf-8")
+        self.active_model, self.last_model = stored.as_posix(), None
+        self._save_inputs()
+        self._load_active_model()
+        if digest != previous:
+            self.remove_group(SourceKind.MEASUREMENT)
+
+    def _last_model_digest(self) -> str:
+        if self.last_model is None:
+            return ""
+        return _digest(load_parts(self.data_dir / self.last_model)[1])
+
+    @property
+    def has_view(self) -> bool:
+        return bool(self.model_digest) and self.model_digest == self.geometry_for and (self.data_dir / "model.bin").exists()
+
+    def file_names(self) -> list[str]:
+        named = [f.source.file for f in self.added if f.source.kind in FILE_KINDS]
+        return list(dict.fromkeys(self.files + named))
+
+    def inputs(self) -> dict:
+        def count(kind: SourceKind) -> int:
+            return sum(f.source.kind == kind for f in self.added)
+
+        return {
+            "model": {"name": self.model_name, "parts": self.model_parts, "has_view": self.has_view,
+                      "active": self.active_model is not None, "restorable": self.active_model is None and self.last_model is not None},
+            "files": [{"name": name, "facts": sum(f.source.kind in FILE_KINDS and f.source.file == name for f in self.added)}
+                      for name in self.file_names()],
+            "measurements": count(SourceKind.MEASUREMENT) if self.active_model is not None else 0,
+            "chat": count(SourceKind.CHAT),
+        }
+
     def reset(self) -> None:
-        self.added, self.history = [], []
+        self.added, self.history, self.files = [], [], []
         self.added_file.unlink(missing_ok=True)
+        self._save_inputs()
 
     def result(self, profile_id: str) -> RunResult:
         profile = PROFILES.get(profile_id)
         if profile is None:
             raise HTTPException(404, f"Unknown ship profile: {profile_id}")
-        facts = self.model_facts + self.added + (demo_faults() if profile.use_demo_faults else [])
+        # A measurement came from the model, so it can't count while the model is removed.
+        added = [f for f in self.added if self.active_model is not None or f.source.kind != SourceKind.MEASUREMENT]
+        facts = self.model_facts + added + (demo_faults() if profile.use_demo_faults else [])
         return run(FactStore(facts), self.rules, profile)
 
 
@@ -84,6 +204,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
 
     def spend() -> dict:
         return {"spent_usd": round(state.ledger.spent, 4), "cap_usd": state.ledger.cap, "calls": state.ledger.calls}
+
+    def rerun(before: RunResult, profile: str, **extra) -> dict:
+        after = state.result(profile)
+        return {"recorded": [], "changes": _changes(before, after), "result": after, "spend": spend(),
+                "inputs": state.inputs(), **extra}
 
     @app.get("/api/profiles")
     def profiles():
@@ -115,6 +240,54 @@ def create_app(state: AppState | None = None) -> FastAPI:
         state.reset()
         return {"ok": True}
 
+    @app.get("/api/inputs")
+    def inputs():
+        return state.inputs()
+
+    @app.delete("/api/inputs/model")
+    def remove_model(profile: str):
+        before = state.result(profile)
+        state.remove_model()
+        return rerun(before, profile)
+
+    @app.post("/api/inputs/model/restore")
+    def restore_model(profile: str):
+        before = state.result(profile)
+        state.restore_model()
+        return rerun(before, profile)
+
+    @app.post("/api/inputs/model")
+    def import_model(profile: str = Form(...), file: UploadFile = File(...)):
+        name = file.filename or "model"
+        if Path(name).suffix.lower() != ".nwd":
+            raise HTTPException(400, f"Can't import {name}. The app reads Navisworks .nwd files only.")
+        before = state.result(profile)
+        state.data_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=state.data_dir, suffix=".nwd", delete=False) as temporary:
+            shutil.copyfileobj(file.file, temporary)
+        try:
+            state.import_model(Path(temporary.name), name)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        finally:
+            Path(temporary.name).unlink(missing_ok=True)
+        return rerun(before, profile)
+
+    @app.delete("/api/inputs/files")
+    def remove_file(profile: str, name: str):
+        before = state.result(profile)
+        if not state.remove_file(name):
+            raise HTTPException(404, f"No file called {name} is loaded.")
+        return rerun(before, profile)
+
+    @app.delete("/api/inputs/group/{group}")
+    def remove_group(group: str, profile: str):
+        if group not in FACT_GROUPS:
+            raise HTTPException(404, f"Unknown input group: {group}")
+        before = state.result(profile)
+        state.remove_group(FACT_GROUPS[group])
+        return rerun(before, profile)
+
     @app.post("/api/chat")
     def chat(request: ChatRequest):
         before = state.result(request.profile)
@@ -124,28 +297,28 @@ def create_app(state: AppState | None = None) -> FastAPI:
             raise HTTPException(503, str(error)) from error
         state.history += [{"role": "engineer", "text": request.message}, {"role": "assistant", "text": reply}]
         state.add_facts(facts)
-        after = state.result(request.profile)
-        return {"reply": reply, "recorded": facts, "dropped": dropped, "changes": _changes(before, after),
-                "result": after, "spend": spend()}
+        return rerun(before, request.profile, reply=reply, recorded=facts, dropped=dropped)
 
     @app.post("/api/upload")
     async def upload(profile: str = Form(...), file: UploadFile = File(...), pages: str = Form("")):
         before = state.result(profile)
+        name = file.filename or "upload"
         page_list = [int(p) for p in pages.replace(" ", "").split(",") if p.isdigit()] or None
         try:
             facts, cached, dropped = ingest.read_file(state.claude, state.data_dir / "extract-cache",
-                                                      file.filename or "upload", await file.read(), page_list)
+                                                      name, await file.read(), page_list)
         except (BudgetExceeded, ModelRefused, ingest.TooManyPages, ValueError) as error:
             raise HTTPException(400, str(error)) from error
         known = {(f.subject, f.property, f.value, f.source.file) for f in state.added}
         fresh = [f for f in facts if (f.subject, f.property, f.value, f.source.file) not in known]
+        state.add_file(name)
         state.add_facts(fresh)
-        after = state.result(profile)
-        return {"recorded": fresh, "cached": cached, "dropped": dropped, "changes": _changes(before, after),
-                "result": after, "spend": spend()}
+        return rerun(before, profile, recorded=fresh, cached=cached, dropped=dropped)
 
     @app.post("/api/measure")
     def measure(profile: str, request: MeasureRequest):
+        if state.active_model is None:
+            raise HTTPException(400, "There's no 3D model to measure.")
         before = state.result(profile)
         if not any(p == request.property for _, p, kind, _m in VOCABULARY if kind == "length"):
             raise HTTPException(400, f"Not a measurable property: {request.property}")
@@ -154,18 +327,15 @@ def create_app(state: AppState | None = None) -> FastAPI:
                     source=Source(kind=SourceKind.MEASUREMENT, locator=locator, quote=request.note),
                     confidence="medium", location=request.a)
         state.add_facts([fact])
-        after = state.result(profile)
-        return {"recorded": [fact], "changes": _changes(before, after), "result": after, "spend": spend()}
-
-    data_dir = state.data_dir
+        return rerun(before, profile, recorded=[fact])
 
     @app.get("/model/meta")
     def model_meta():
-        return _ship_file(data_dir / "model-meta.json", "application/json")
+        return _ship_file(state, "model-meta.json", "application/json")
 
     @app.get("/model/bin")
     def model_bin():
-        return _ship_file(data_dir / "model.bin", "application/octet-stream")
+        return _ship_file(state, "model.bin", "application/octet-stream")
 
     dist = ROOT / "frontend" / "dist"
     if dist.exists():
@@ -173,10 +343,10 @@ def create_app(state: AppState | None = None) -> FastAPI:
     return app
 
 
-def _ship_file(path: Path, media_type: str) -> FileResponse:
-    if not path.exists():
-        raise HTTPException(404, "Ship data isn't set up. See the README.")
-    return FileResponse(path, media_type=media_type)
+def _ship_file(state: AppState, name: str, media_type: str) -> FileResponse:
+    if not state.has_view:
+        raise HTTPException(404, "No 3D view is available for the current model.")
+    return FileResponse(state.data_dir / name, media_type=media_type)
 
 
 def _changes(before: RunResult, after: RunResult) -> list[str]:
@@ -187,7 +357,13 @@ def _changes(before: RunResult, after: RunResult) -> list[str]:
     for key, finding in new.items():
         previous = old.get(key)
         if previous is None or previous.status != finding.status or previous.measured != finding.measured:
-            changes.append(f"{finding.label}: {finding.status.value.replace('_', ' ')}. {finding.measured}".strip())
+            status = "can't tell" if finding.status == Status.CANT_TELL else finding.status.value
+            changes.append(f"{finding.label}: {status}. {finding.measured}".strip())
+    gone = [finding.label for key, finding in old.items() if key not in new]
+    if gone:
+        changes.append(f"No longer checked: {len(gone)} result(s).")
+    if len(changes) > MAX_LISTED_CHANGES:
+        changes = changes[:MAX_LISTED_CHANGES] + [f"And {len(changes) - MAX_LISTED_CHANGES} more."]
     return changes
 
 

@@ -111,6 +111,145 @@ def test_measurement_records_a_fact(tmp_path):
     assert state.added[0].source.kind == SourceKind.MEASUREMENT
 
 
+def upload_note(api, name="note.txt"):
+    return api.post("/api/upload", data={"profile": "rcrv"}, files={"file": (name, b"Rafts: 16 persons")})
+
+
+def test_removing_a_file_removes_its_facts_and_reruns(tmp_path):
+    api, state = client(tmp_path, FakeClaude({"facts": [raw("liferaft", "capacity_persons", 16, "")]}))
+    upload_note(api)
+    assert api.get("/api/inputs").json()["files"] == [{"name": "note.txt", "facts": 1}]
+    body = api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "note.txt"}).json()
+    assert body["inputs"]["files"] == []
+    assert state.added == []
+    assert body["result"]["counts"]["cant_tell"] == 1
+
+
+def test_a_file_with_no_facts_is_listed_and_removable(tmp_path):
+    api, _ = client(tmp_path, FakeClaude({"facts": []}))
+    upload_note(api)
+    assert api.get("/api/inputs").json()["files"] == [{"name": "note.txt", "facts": 0}]
+    api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "note.txt"})
+    assert api.get("/api/inputs").json()["files"] == []
+
+
+def test_a_removed_file_costs_nothing_to_add_again(tmp_path):
+    fake = FakeClaude({"facts": [raw("liferaft", "capacity_persons", 16, "")]})
+    api, state = client(tmp_path, fake)
+    upload_note(api)
+    api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "note.txt"})
+    assert upload_note(api).json()["cached"] is True
+    assert fake.calls == 1 and len(state.added) == 1
+
+
+def test_removing_an_unknown_file_is_an_error(tmp_path):
+    api, _ = client(tmp_path, FakeClaude())
+    assert api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "nope.png"}).status_code == 404
+
+
+def test_removing_the_model_removes_its_facts_then_restore_brings_them_back(tmp_path):
+    api, state = client(tmp_path, FakeClaude())
+    body = api.delete("/api/inputs/model", params={"profile": "rcrv"}).json()
+    assert body["inputs"]["model"] == {"name": "", "parts": 0, "has_view": False, "active": False, "restorable": True}
+    raft = next(f for f in body["result"]["findings"] if f["rule_id"] == "R")
+    assert raft["measured"] == "No liferaft racks in the design data"
+    assert (state.data_dir / "parts.json").exists()
+    restored = api.post("/api/inputs/model/restore", params={"profile": "rcrv"}).json()
+    assert restored["inputs"]["model"]["parts"] == 2
+    assert "2 rafts on port" in restored["result"]["findings"][0]["measured"]
+
+
+def test_removal_survives_a_restart(tmp_path):
+    api, state = client(tmp_path, FakeClaude())
+    api.delete("/api/inputs/model", params={"profile": "rcrv"})
+    reloaded = AppState(state.data_dir, state.rules_file, state.rule_texts_dir, claude=FakeClaude())
+    assert reloaded.inputs()["model"]["active"] is False
+    assert reloaded.model_facts == []
+
+
+def test_no_racks_with_known_capacity_is_cant_tell_not_fail(tmp_path):
+    fake = FakeClaude({"reply": "Recorded.", "facts": [raw("liferaft", "capacity_persons", 16, ""), raw("ship", "persons_on_board", 29, "")]})
+    api, _ = client(tmp_path, fake)
+    api.delete("/api/inputs/model", params={"profile": "rcrv"})
+    counts = api.post("/api/chat", json={"profile": "rcrv", "message": "16 persons, 29 on board"}).json()["result"]["counts"]
+    assert counts["cant_tell"] == 1 and counts["fail"] == 0
+
+
+def measurement_body():
+    return {"subject": "bridge", "property": "eye_to_bow", "value": 24.2, "unit": "m",
+            "a": {"x": 0, "y": 0, "z": 0}, "b": {"x": 950, "y": 0, "z": 0}}
+
+
+def test_measuring_needs_a_model(tmp_path):
+    api, _ = client(tmp_path, FakeClaude())
+    api.delete("/api/inputs/model", params={"profile": "rcrv"})
+    assert api.post("/api/measure", params={"profile": "rcrv"}, json=measurement_body()).status_code == 400
+
+
+def test_measurements_do_not_count_while_the_model_is_removed(tmp_path):
+    api, state = client(tmp_path, FakeClaude())
+    api.post("/api/measure", params={"profile": "rcrv"}, json=measurement_body())
+    api.delete("/api/inputs/model", params={"profile": "rcrv"})
+    assert state.inputs()["measurements"] == 0
+    assert api.post("/api/inputs/model/restore", params={"profile": "rcrv"}).json()["inputs"]["measurements"] == 1
+
+
+def test_measurements_and_chat_can_be_removed_as_groups(tmp_path):
+    api, state = client(tmp_path, FakeClaude({"reply": "Ok.", "facts": [raw("ship", "persons_on_board", 29, "")]}))
+    api.post("/api/measure", params={"profile": "rcrv"}, json=measurement_body())
+    api.post("/api/chat", json={"profile": "rcrv", "message": "29 on board"})
+    api.delete("/api/inputs/group/measurements", params={"profile": "rcrv"})
+    assert [f.source.kind for f in state.added] == [SourceKind.CHAT]
+    assert api.delete("/api/inputs/group/chat", params={"profile": "rcrv"}).json()["inputs"]["chat"] == 0
+
+
+def import_model(api, monkeypatch, parts, name="other.nwd"):
+    monkeypatch.setattr("app.nwd.decode", lambda path: parts)
+    return api.post("/api/inputs/model", data={"profile": "rcrv"}, files={"file": (name, b"data")})
+
+
+def test_importing_a_different_model_replaces_it_and_drops_measurements(tmp_path, monkeypatch):
+    api, state = client(tmp_path, FakeClaude())
+    api.post("/api/measure", params={"profile": "rcrv"}, json=measurement_body())
+    parts = [{"name": "LIFERAFT SINGLE RACK", "x_in": 0.0, "y_in": 5.0, "z_in": 0.0}]
+    body = import_model(api, monkeypatch, parts).json()
+    assert body["inputs"]["model"]["name"] == "other.nwd" and body["inputs"]["model"]["parts"] == 1
+    assert state.added == []
+    assert not list(state.data_dir.glob("*.nwd"))
+
+
+def test_only_the_model_the_geometry_belongs_to_has_a_3d_view(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    data.mkdir()
+    original = [{"name": "LIFERAFT DOUBLE RACK", "x_in": 0.0, "y_in": 10.0, "z_in": 0.0}]
+    (data / "parts.json").write_text(json.dumps({"source": "ship.nwd", "parts": original}))
+    (data / "model.bin").write_bytes(b"x")
+    (data / "model-meta.json").write_text("{}")
+    state = AppState(data, rules_file(tmp_path), tmp_path / "none", claude=FakeClaude())
+    api = TestClient(create_app(state))
+    assert api.get("/api/inputs").json()["model"]["has_view"] is True
+    assert api.get("/model/meta").status_code == 200
+    other = import_model(api, monkeypatch, [{"name": "LIFERAFT SINGLE RACK", "x_in": 0.0, "y_in": 5.0, "z_in": 0.0}])
+    assert other.json()["inputs"]["model"]["has_view"] is False
+    assert api.get("/model/meta").status_code == 404
+    same = import_model(api, monkeypatch, original, name="ship.nwd")
+    assert same.json()["inputs"]["model"]["has_view"] is True
+
+
+def test_a_file_with_no_readable_parts_keeps_the_current_model(tmp_path, monkeypatch):
+    api, state = client(tmp_path, FakeClaude())
+    response = import_model(api, monkeypatch, [])
+    assert response.status_code == 400
+    assert state.inputs()["model"]["parts"] == 2
+    assert not list(state.data_dir.glob("*.nwd"))
+
+
+def test_only_nwd_files_import_as_3d_models(tmp_path):
+    api, _ = client(tmp_path, FakeClaude())
+    response = api.post("/api/inputs/model", data={"profile": "rcrv"}, files={"file": ("model.step", b"x")})
+    assert response.status_code == 400 and "nwd" in response.json()["detail"]
+
+
 def test_scanned_pdf_with_too_many_pages_must_choose_pages():
     import pymupdf
     document = pymupdf.open()

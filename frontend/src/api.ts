@@ -68,11 +68,19 @@ export interface RecordedFact {
   confidence: string;
 }
 
+export interface Inputs {
+  model: { name: string; parts: number; has_view: boolean; active: boolean; restorable: boolean };
+  files: { name: string; facts: number }[];
+  measurements: number;
+  chat: number;
+}
+
 export interface UpdateResponse {
   recorded: RecordedFact[];
   changes: string[];
   result: RunResult;
   spend: Spend;
+  inputs: Inputs;
   reply?: string;
   cached?: boolean;
   dropped?: number;
@@ -126,4 +134,19 @@ export const api = {
   measure: (profile: string, body: unknown) =>
     jsonPost(`/api/measure?profile=${encodeURIComponent(profile)}`, body).then((r) => parse<UpdateResponse>(r)),
   reset: () => fetch("/api/reset", { method: "POST" }).then((r) => parse<{ ok: boolean }>(r)),
+  inputs: () => fetch("/api/inputs").then((r) => parse<Inputs>(r)),
+  removeModel: (profile: string) =>
+    fetch(`/api/inputs/model?profile=${encodeURIComponent(profile)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
+  restoreModel: (profile: string) =>
+    fetch(`/api/inputs/model/restore?profile=${encodeURIComponent(profile)}`, { method: "POST" }).then((r) => parse<UpdateResponse>(r)),
+  importModel: (profile: string, file: File) => {
+    const form = new FormData();
+    form.append("profile", profile);
+    form.append("file", file);
+    return fetch("/api/inputs/model", { method: "POST", body: form }).then((r) => parse<UpdateResponse>(r));
+  },
+  removeFile: (profile: string, name: string) =>
+    fetch(`/api/inputs/files?profile=${encodeURIComponent(profile)}&name=${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
+  removeGroup: (profile: string, group: "measurements" | "chat") =>
+    fetch(`/api/inputs/group/${group}?profile=${encodeURIComponent(profile)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
 };

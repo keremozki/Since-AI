@@ -77,6 +77,16 @@ def test_width_for_a_part_type_answers_the_question():
     assert doors(door_part("SLIDING W/T DOOR FLUSH R"), extra=extra)[0].status == Status.FAIL
 
 
+def test_no_door_data_is_cant_tell_not_silence():
+    finding = check_door_clear_width(DOOR_RULE, FactStore(), PASSENGER)[0]
+    assert finding.status == Status.CANT_TELL and finding.measured == "No doors in the design data"
+
+
+def test_no_stair_data_is_cant_tell_not_silence():
+    finding = check_stair_width(STAIR_RULE, FactStore(), PASSENGER)[0]
+    assert finding.status == Status.CANT_TELL and finding.measured == "No stairs in the design data"
+
+
 def test_service_access_doors_are_not_checked():
     assert doors(door_part("ACCESS DOOR CEILING TJMB0- C/O 23.625x17.72")) == []
 
