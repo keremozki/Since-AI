@@ -1,4 +1,4 @@
-# Ship Compliance Checker
+# Dynamis SCC
 
 Since AI Hackathon 2026, Meyer Turku challenge. A web app that checks a ship design against rules and
 regulations, and tells the engineer what passes, what fails, where sources conflict, and what's missing.

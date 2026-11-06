@@ -153,7 +153,19 @@ def test_disagreeing_crew_counts_block_the_raft_check():
     finding = rafts(fact("ship", "crew_complement", 12.0), fact("ship", "crew_complement", 13.0),
                     fact("ship", "science_complement", 16.0), fact("liferaft", "capacity_persons", 16.0))[0]
     assert finding.status == Status.CONFLICT
-    assert "crew complement" in finding.measured
+    assert "crew count" in finding.measured
+
+
+def test_conflict_shows_each_value_once_and_ties_sources_to_values():
+    def stated(value, file):
+        return Fact(subject="ship", property="length_overall", value=value, unit="ft",
+                    source=Source(kind=SourceKind.DOCUMENT, file=file))
+
+    store = FactStore([stated(199.5, "a.pdf"), stated(192.8, "b.pdf"), stated(199.5, "c.pdf")])
+    finding = run(store, [], PROFILES["rcrv"]).findings[0]
+    assert finding.label == "Overall length"
+    assert finding.measured == "199.5 ft vs. 192.8 ft"
+    assert finding.sources == ["199.5 ft: Document: a.pdf", "192.8 ft: Document: b.pdf", "199.5 ft: Document: c.pdf"]
 
 
 def test_disagreeing_input_blocks_the_check():

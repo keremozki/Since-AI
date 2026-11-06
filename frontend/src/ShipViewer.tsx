@@ -1,18 +1,17 @@
 import { MeshoptDecoder } from "meshoptimizer";
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { acceleratedRaycast, computeBoundsTree } from "three-mesh-bvh";
 import { Finding, Point, Status } from "./api";
+import { STATUS_LABEL, StatusIcon } from "./shared";
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 
-export const STATUS_COLOR: Record<Status, string> = {
-  pass: "#2e8b57",
-  fail: "#d13438",
-  conflict: "#b8590a",
-  cant_tell: "#6b7785",
-};
+// Height of each deck above baseline, in feet. These match the deck names in the results.
+const DECKS: [string, number][] = [["Second", 10], ["Main", 19], ["01", 28], ["02", 37], ["03", 45.5], ["04", 54]];
+const HEADROOM_IN = 84;
+const LEGEND: Status[] = ["fail", "conflict", "cant_tell"];
 
 const STATUS_HEX: Record<Status, number> = { pass: 0x2e8b57, fail: 0xd13438, conflict: 0xe07b12, cant_tell: 0x7d8894 };
 const SHIP_CENTRE = new THREE.Vector3(-1000, 0, 400);
@@ -70,9 +69,11 @@ interface Props {
   /** Whether to show the ship's geometry. Null until the app knows. */
   modelVisible: boolean | null;
   modelActive: boolean;
+  onToggleMeasure: () => void;
+  children?: ReactNode;
 }
 
-export default function ShipViewer({ findings, selected, onSelect, measuring, onMeasured, modelVisible, modelActive }: Props) {
+export default function ShipViewer({ findings, selected, onSelect, measuring, onMeasured, modelVisible, modelActive, onToggleMeasure, children }: Props) {
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<ViewerCore | null>(null);
   const [status, setStatus] = useState("");
@@ -112,17 +113,40 @@ export default function ShipViewer({ findings, selected, onSelect, measuring, on
         <p className="viewer-empty">
           {modelActive
             ? "This model's parts were read and checked, but a 3D view is only available for the RCRV model."
-            : "No 3D model loaded. Add one under Inputs."}
+            : "No 3D model loaded. Add one in the Inputs tab."}
         </p>
       )}
-      <div className="viewer-controls">
-        <label>
-          Cut height
-          <input type="range" min={60} max={FULL_CUT} step={6} value={cut} onChange={(e) => setCut(Number(e.target.value))} />
-          <output>{cut >= FULL_CUT ? "off" : `${(cut / 12).toFixed(1)} ft`}</output>
-        </label>
-        <button type="button" onClick={() => { setCut(FULL_CUT); view.current?.home(); }}>Whole ship</button>
-      </div>
+      {modelVisible && (
+        <>
+          <div className="viewer-top">
+            <div className="legend" aria-label="Marker colours">
+              {LEGEND.map((status) => <span key={status}><StatusIcon status={status} size={12} /> {STATUS_LABEL[status]}</span>)}
+            </div>
+            <button type="button" aria-pressed={measuring} onClick={onToggleMeasure}>Measure</button>
+          </div>
+          {children}
+          <div className="viewer-controls">
+            <div className="decks" role="group" aria-label="Slice the ship at a deck">
+              <span>See inside:</span>
+              {DECKS.map(([name, feet]) => {
+                const height = feet * 12 + HEADROOM_IN;
+                return (
+                  <button type="button" key={name} aria-pressed={cut === height} onClick={() => {
+                    setCut(height);
+                    view.current?.viewDeck(height);
+                  }}>{name}</button>
+                );
+              })}
+              <button type="button" aria-pressed={cut >= FULL_CUT} onClick={() => { setCut(FULL_CUT); view.current?.home(); }}>Whole ship</button>
+            </div>
+            <label className="slice">
+              <span>Slice height</span>
+              <input type="range" min={60} max={FULL_CUT} step={6} value={cut} onChange={(e) => setCut(Number(e.target.value))} />
+              <output>{cut >= FULL_CUT ? "Off" : `${(cut / 12).toFixed(1)} ft`}</output>
+            </label>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -286,6 +310,18 @@ class ViewerCore {
     this.flight = null;
     this.camera.position.set(-1000, -3600, 1500);
     this.controls.target.copy(SHIP_CENTRE);
+  }
+
+  /** Look down into the ship from above, for a deck slice. */
+  viewDeck(height: number) {
+    const target = new THREE.Vector3(SHIP_CENTRE.x, 0, height - HEADROOM_IN);
+    this.flight = {
+      from: this.camera.position.clone(),
+      to: target.clone().add(new THREE.Vector3(0, -900, 1900)),
+      fromT: this.controls.target.clone(),
+      toT: target,
+      start: performance.now(),
+    };
   }
 
   flyTo(point: Point) {

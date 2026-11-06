@@ -42,6 +42,7 @@ export interface Profile {
   name: string;
   ship_type: string;
   note: string;
+  use_demo_faults: boolean;
 }
 
 export interface RunResult {
@@ -77,6 +78,7 @@ export interface Inputs {
 
 export interface UpdateResponse {
   recorded: RecordedFact[];
+  recorded_text: string[];
   changes: string[];
   result: RunResult;
   spend: Spend;

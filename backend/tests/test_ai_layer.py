@@ -65,8 +65,18 @@ def test_chat_answer_is_recorded_then_tests_rerun(tmp_path):
     body = api.post("/api/chat", json={"profile": "rcrv", "message": "Rafts are 16 persons, 29 on board"}).json()
     assert body["result"]["counts"]["pass"] == 2
     assert body["recorded"][0]["source"]["kind"] == "chat"
+    assert body["recorded_text"] == ["Liferaft capacity: 16", "Persons on board: 29"]
     assert any("pass" in change for change in body["changes"])
     assert len(state.added) == 2
+
+
+def test_cant_tell_names_only_the_value_still_missing(tmp_path):
+    fake = FakeClaude({"reply": "Recorded.", "facts": [raw("liferaft", "capacity_persons", 16, "persons")]})
+    api, _ = client(tmp_path, fake)
+    body = api.post("/api/chat", json={"profile": "rcrv", "message": "Rafts are 16 persons"}).json()
+    finding = body["result"]["findings"][0]
+    assert finding["measured"].endswith("Not stated: persons on board.")
+    assert "rated capacity" not in finding["question"]
 
 
 def test_ai_reply_cannot_change_a_result(tmp_path):

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from . import chat as chat_module
 from . import ingest, nwd
+from .checks import describe_fact
 from .engine import report_text, run
 from .llm import DEFAULT_CAP_USD, BudgetExceeded, Claude, Ledger, ModelRefused, load_env
 from .models import Fact, Point, RunResult, Source, SourceKind, Status
@@ -199,16 +200,16 @@ def create_app(state: AppState | None = None) -> FastAPI:
     if state is None:
         load_env(ROOT / ".env")
         state = AppState(ROOT / "ship-data", ROOT / "rules" / "rules.yaml", ROOT / "docs" / "rules")
-    app = FastAPI(title="Ship compliance checker")
+    app = FastAPI(title="Dynamis SCC")
     app.state.compliance = state
 
     def spend() -> dict:
         return {"spent_usd": round(state.ledger.spent, 4), "cap_usd": state.ledger.cap, "calls": state.ledger.calls}
 
-    def rerun(before: RunResult, profile: str, **extra) -> dict:
+    def rerun(before: RunResult, profile: str, recorded: list[Fact] | None = None, **extra) -> dict:
         after = state.result(profile)
-        return {"recorded": [], "changes": _changes(before, after), "result": after, "spend": spend(),
-                "inputs": state.inputs(), **extra}
+        return {"recorded": recorded or [], "recorded_text": [describe_fact(f) for f in recorded or []],
+                "changes": _changes(before, after), "result": after, "spend": spend(), "inputs": state.inputs(), **extra}
 
     @app.get("/api/profiles")
     def profiles():
@@ -360,7 +361,8 @@ def _changes(before: RunResult, after: RunResult) -> list[str]:
             status = "can't tell" if finding.status == Status.CANT_TELL else finding.status.value
             changes.append(f"{finding.label}: {status}. {finding.measured}".strip())
     gone = [finding.label for key, finding in old.items() if key not in new]
-    if gone:
+    # When new results replace old ones, like one liferaft result becoming one per side, nothing was lost.
+    if len(gone) > len(new.keys() - old.keys()):
         changes.append(f"No longer checked: {len(gone)} result(s).")
     if len(changes) > MAX_LISTED_CHANGES:
         changes = changes[:MAX_LISTED_CHANGES] + [f"And {len(changes) - MAX_LISTED_CHANGES} more."]

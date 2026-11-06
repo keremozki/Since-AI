@@ -22,6 +22,34 @@ CONSISTENCY_RULE = Rule(
 )
 RELATIVE_TOLERANCE = 0.005
 LENGTH_TOLERANCE_MM = 10.0
+PLAIN_NAMES = {
+    "crew_complement": "Crew count",
+    "science_complement": "Science team count",
+    "persons_on_board": "Persons on board",
+    "length_overall": "Overall length",
+    "beam": "Beam",
+    "lightship_weight": "Lightship weight",
+    "main_vertical_zones": "Fire zone count",
+    "capacity_persons": "Liferaft capacity",
+    "height_above_hull": "Masthead light height",
+    "time_minutes": "Evacuation time",
+    "eye_height_above_water": "Conning position eye height",
+    "obstruction_height_above_water": "Forward obstruction height",
+    "eye_to_obstruction": "Distance to forward obstruction",
+    "eye_to_bow": "Distance to bow",
+    "clear_width": "Clear width",
+}
+
+
+def _plain(prop: str) -> str:
+    return PLAIN_NAMES.get(prop, prop.replace("_", " ").capitalize())
+
+
+def describe_fact(fact: Fact) -> str:
+    """A recorded fact in plain words, like "Crew count: 12 persons"."""
+    door = f"Door {fact.subject.split(':', 1)[1]} " if fact.subject.startswith("door-number:") else ""
+    name = _plain(fact.property)
+    return f"{door}{name.lower() if door else name}: {_show(fact)}"
 
 
 def _finding(rule: Rule, status: Status, subject: str, label: str, **fields) -> Finding:
@@ -71,7 +99,7 @@ def _value(store: FactStore, subject: str, prop: str) -> Fact | None:
 
 def _waiting(rule: Rule, blocked: _Blocked, label: str) -> list[Finding]:
     return [_finding(rule, Status.CONFLICT, blocked.subject, label,
-                     measured=f"Waiting on {blocked.subject} {blocked.prop.replace('_', ' ')}: its sources disagree.",
+                     measured=f"On hold: sources disagree on {_plain(blocked.prop).lower()}.",
                      required="One agreed value", why="This check can't run until the conflict is resolved.")]
 
 
@@ -181,7 +209,8 @@ def check_stair_width(rule: Rule, store: FactStore, profile: ShipProfile) -> lis
         tread = store.one(subject, "tread_length")
         common = dict(where=str(deck.value) if deck else "", required=required, assumptions=assumptions,
                       why="Passenger ship escape stairs have a minimum clear width.")
-        label = f"Stair {subject.split(':')[1]}: {name.value}"
+        place = "exterior" if "EXTERIOR" in str(name.value).upper() else "interior"
+        label = f"Stair {subject.split(':')[1]} ({place})"
         if tread is None:
             findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Tread length not stated",
                                      sources=_sources(name), location=name.location,
@@ -239,14 +268,16 @@ def check_raft_capacity(rule: Rule, store: FactStore, profile: ShipProfile) -> l
                          required=required, why="Survival craft capacity must cover everyone on board.",
                          sources=_sources(persons, capacity), question="Add a 3D model that shows the liferaft racks.")]
     if persons is None or capacity is None:
-        needs = []
+        needs, missing_parts = [], []
         if persons is None:
             needs.append("How many persons does the ship carry at most?")
+            missing_parts.append("persons on board")
         if capacity is None:
             needs.append("What is the rated capacity of each liferaft, in persons?")
+            missing_parts.append("liferaft capacity")
         where = first_rack.get("port") or first_rack.get("starboard")
         return [_finding(rule, Status.CANT_TELL, "liferaft", label,
-                         measured=f"Racks in the 3D model: {racks}. Capacity not stated.",
+                         measured=f"Racks in the 3D model: {racks}. Not stated: {' and '.join(missing_parts)}.",
                          required=required, why="Survival craft capacity must cover everyone on board.",
                          sources=_sources(*first_rack.values(), persons), location=where.location if where else None,
                          question=" ".join(needs))]
@@ -371,13 +402,13 @@ def check_consistency(store: FactStore) -> list[Finding]:
     for subject, prop in sorted(keys):
         facts = _disagreement(store, subject, prop)
         if facts:
-            label = f"{subject.replace('_', ' ').capitalize()}: {prop.replace('_', ' ')}"
             located = next((f.location for f in facts if f.location), None)
-            findings.append(_finding(CONSISTENCY_RULE, Status.CONFLICT, f"{subject}.{prop}", label,
-                                     measured=" vs. ".join(_show(f) for f in facts), required="One agreed value",
-                                     why="Two sources disagree, so at least one is wrong.",
-                                     sources=_sources(*facts), location=located,
-                                     question=f"Which {prop.replace('_', ' ')} is correct?"))
+            values = list(dict.fromkeys(_show(f) for f in facts))
+            findings.append(_finding(CONSISTENCY_RULE, Status.CONFLICT, f"{subject}.{prop}", _plain(prop),
+                                     measured=" vs. ".join(values), required="One agreed value",
+                                     why="Sources disagree, so at least one is wrong.",
+                                     sources=[f"{_show(f)}: {f.source.describe()}" for f in facts], location=located,
+                                     question=f"Which {_plain(prop).lower()} is correct?"))
     return findings
 
 
