@@ -4,10 +4,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pymupdf
 
+from . import drawing
 from .llm import Claude
 from .models import Fact, Source, SourceKind
 from .vocabulary import FACT_SCHEMA, to_fact, vocabulary_text
@@ -85,9 +87,49 @@ def build_content(filename: str, data: bytes, pages: list[int] | None = None) ->
     return blocks + [{"type": "text", "text": f"File name: {filename}. Report the facts it states."}]
 
 
+def _same_value(a: Fact, b: Fact) -> bool:
+    try:
+        return a.unit == b.unit and abs(float(a.value) - float(b.value)) < 1e-6
+    except (TypeError, ValueError):
+        return str(a.value) == str(b.value)
+
+
+def merge_readers(vector: list[Fact], ai: list[Fact]) -> list[Fact]:
+    """Two independent readers: agreement is noted on the code reading, disagreement stays as two facts."""
+    merged = list(vector)
+    for fact in ai:
+        twin = next((v for v in vector if v.key() == fact.key() and _same_value(v, fact)), None)
+        if twin is not None:
+            twin.meta["readers_agree"] = True
+        else:
+            merged.append(fact)
+    return merged
+
+
 def read_file(claude: Claude, cache_dir: Path, filename: str, data: bytes,
               pages: list[int] | None = None) -> tuple[list[Fact], bool, int]:
-    """Return (accepted facts, whether the result came from cache, facts dropped by validation)."""
+    """Return (accepted facts, whether the result came from cache, facts dropped by validation).
+
+    A vector PDF is read by code first (free, exact, no API). The AI reader runs when code finds
+    nothing, or on every file when CROSS_CHECK_READERS=1, so the two readers can confirm each other.
+    """
+    vector: list[Fact] = []
+    if Path(filename).suffix.lower() == ".pdf":
+        vector = drawing.read_pdf(data, filename, pages).facts
+    cross_check = os.environ.get("CROSS_CHECK_READERS") == "1" and os.environ.get("ANTHROPIC_API_KEY")
+    if vector and not cross_check:
+        return vector, False, 0
+    no_ai = isinstance(claude, Claude) and claude._client is None and not os.environ.get("ANTHROPIC_API_KEY")
+    if no_ai:
+        if vector:
+            return vector, False, 0
+        raise ValueError(f"The drawing reader found no values in {filename}, and no API key is set for the AI reader.")
+    ai, cached, dropped = _read_with_ai(claude, cache_dir, filename, data, pages)
+    return merge_readers(vector, ai), cached, dropped
+
+
+def _read_with_ai(claude: Claude, cache_dir: Path, filename: str, data: bytes,
+                  pages: list[int] | None = None) -> tuple[list[Fact], bool, int]:
     digest = hashlib.sha256(data + repr((PROMPT_VERSION, pages)).encode()).hexdigest()
     cache_file = cache_dir / f"{digest}.json"
     cached = cache_file.exists()
@@ -101,4 +143,6 @@ def read_file(claude: Claude, cache_dir: Path, filename: str, data: bytes,
     is_image = Path(filename).suffix.lower() in IMAGE_TYPES
     template = Source(kind=SourceKind.IMAGE if is_image else SourceKind.DOCUMENT, file=filename)
     facts = [fact for fact in (to_fact(raw, template) for raw in raw_facts) if fact]
+    for fact in facts:
+        fact.meta = {"reader": "ai"}
     return facts, cached, len(raw_facts) - len(facts)

@@ -1,0 +1,168 @@
+{
+  "SIMULATED": true,
+  "warning": "Made-up data. Shows the pipeline learns, not real accuracy.",
+  "n_labels": 60,
+  "real_share": 0.7666666666666667,
+  "tau_cross_validated": [
+    {
+      "tau": 0.5,
+      "precision": 0.9767441860465116,
+      "recall": 0.9130434782608695,
+      "false_alarm_rate": 0.07142857142857142,
+      "coverage": 0.7166666666666667,
+      "tp": 42,
+      "fp": 1,
+      "fn": 4,
+      "tn": 13
+    },
+    {
+      "tau": 0.6,
+      "precision": 0.975609756097561,
+      "recall": 0.8695652173913043,
+      "false_alarm_rate": 0.07142857142857142,
+      "coverage": 0.6833333333333333,
+      "tp": 40,
+      "fp": 1,
+      "fn": 6,
+      "tn": 13
+    },
+    {
+      "tau": 0.7,
+      "precision": 1.0,
+      "recall": 0.8478260869565217,
+      "false_alarm_rate": 0.0,
+      "coverage": 0.65,
+      "tp": 39,
+      "fp": 0,
+      "fn": 7,
+      "tn": 14
+    },
+    {
+      "tau": 0.8,
+      "precision": 1.0,
+      "recall": 0.7608695652173914,
+      "false_alarm_rate": 0.0,
+      "coverage": 0.5833333333333334,
+      "tp": 35,
+      "fp": 0,
+      "fn": 11,
+      "tn": 14
+    },
+    {
+      "tau": 0.9,
+      "precision": 1.0,
+      "recall": 0.5,
+      "false_alarm_rate": 0.0,
+      "coverage": 0.38333333333333336,
+      "tp": 23,
+      "fp": 0,
+      "fn": 23,
+      "tn": 14
+    }
+  ],
+  "learning_curve": [
+    {
+      "labels": 10,
+      "mode": "cold_start",
+      "precision": 0.8478361836939751,
+      "recall": 0.8553458649472284,
+      "false_alarm_rate": 0.3155401719934623,
+      "coverage": 0.6791333333333331
+    },
+    {
+      "labels": 15,
+      "mode": "cold_start",
+      "precision": 0.8478361836939751,
+      "recall": 0.8553458649472284,
+      "false_alarm_rate": 0.3155401719934623,
+      "coverage": 0.6791333333333331
+    },
+    {
+      "labels": 20,
+      "mode": "cold_start",
+      "precision": 0.8478361836939751,
+      "recall": 0.8553458649472284,
+      "false_alarm_rate": 0.3155401719934623,
+      "coverage": 0.6791333333333331
+    },
+    {
+      "labels": 25,
+      "mode": "cold_start",
+      "precision": 0.8478361836939751,
+      "recall": 0.8553458649472284,
+      "false_alarm_rate": 0.3155401719934623,
+      "coverage": 0.6791333333333331
+    },
+    {
+      "labels": 30,
+      "mode": "model",
+      "precision": 0.9098883471932832,
+      "recall": 0.6062178718201693,
+      "false_alarm_rate": 0.1293481889537992,
+      "coverage": 0.45080000000000003
+    },
+    {
+      "labels": 35,
+      "mode": "model",
+      "precision": 0.912962829369884,
+      "recall": 0.6162282262687929,
+      "false_alarm_rate": 0.12545483166227883,
+      "coverage": 0.4563333333333334
+    },
+    {
+      "labels": 40,
+      "mode": "model",
+      "precision": 0.916590862735211,
+      "recall": 0.6046797874828074,
+      "false_alarm_rate": 0.11699548845164091,
+      "coverage": 0.4455333333333334
+    },
+    {
+      "labels": 45,
+      "mode": "model",
+      "precision": 0.92161733571479,
+      "recall": 0.6008037880418027,
+      "false_alarm_rate": 0.10894821219129841,
+      "coverage": 0.44026666666666675
+    },
+    {
+      "labels": 50,
+      "mode": "model",
+      "precision": 0.9190902978227035,
+      "recall": 0.6088933014597165,
+      "false_alarm_rate": 0.11391898842181927,
+      "coverage": 0.44733333333333325
+    },
+    {
+      "labels": 55,
+      "mode": "model",
+      "precision": 0.9200243965098652,
+      "recall": 0.6156986188434922,
+      "false_alarm_rate": 0.11310958509779694,
+      "coverage": 0.4515333333333334
+    },
+    {
+      "labels": 60,
+      "mode": "model",
+      "precision": 0.9196400730940061,
+      "recall": 0.6106056286158897,
+      "false_alarm_rate": 0.11309683854549397,
+      "coverage": 0.44820000000000004
+    }
+  ],
+  "weights": {
+    "extraction_confidence": 0.9880036473846323,
+    "margin": 1.1357845331257097,
+    "scale_known": 0.6941126189352601,
+    "n_sources_agree": 0.687295836116066,
+    "value_is_stated": 0.08593986752756243,
+    "unit_converted": -0.057251741457667274,
+    "has_unit_text": -0.26713208617919876,
+    "source_3d_model": -0.3974702871927134,
+    "source_3d_measurement": -0.3070409066260715,
+    "source_document": 0.7624498991720331,
+    "source_image": -0.29968852666389045,
+    "source_chat": 0.23662450911130967,
+    "source_demo_seed": 0.0
+  }
+}

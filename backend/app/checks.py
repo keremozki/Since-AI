@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Callable
 
-from .models import Fact, Finding, Rule, ShipProfile, Status
+from .models import Evidence, Fact, Finding, Rule, ShipProfile, Status
 from .store import FactStore
 from .units import fmt_length, is_length_unit, to_mm
 
@@ -101,6 +101,55 @@ def door_number_conflicts(store: FactStore) -> dict[str, list[Fact]]:
             if any(_values_differ(widths[0], other) for other in widths[1:])}
 
 
+def _width_verdict(width: Fact, min_in: float, min_mm: float) -> tuple[bool, float, float, str, list[str]]:
+    """The inch figure governs. The metric one is a rounded conversion: 32 in is 812.8 mm, not 815 mm."""
+    width_mm = to_mm(float(width.value), width.unit)
+    limit_mm = to_mm(min_in, "in")
+    passed = width_mm >= limit_mm
+    note = []
+    if passed and width_mm < min_mm:
+        note.append(f"Meets {min_in:g} in, but is under the rule's rounded {min_mm:g} mm figure. The inch value is used.")
+    gap = "" if passed else f"{(limit_mm - width_mm) / 25.4:.1f} in ({limit_mm - width_mm:.0f} mm) short"
+    return passed, width_mm, limit_mm, gap, note
+
+
+def _drawing_doors(rule: Rule, store: FactStore, conflicts: dict, required: str, assumptions: list[str],
+                   why: str) -> list[Finding]:
+    """Doors known only from a drawing or chat, by number, that the 3D model doesn't already cover."""
+    in_model = {number for subject in store.subjects("door:") if (numbers := store.one(subject, "numbers")) and numbers.value
+                for number in str(numbers.value).split(",")}
+    min_in, min_mm = float(rule.params["min_in"]), float(rule.params["min_mm"])
+    door_assumptions = assumptions + ["Door known from a drawing by its number. Its use isn't stated, so it's treated as a passage door."]
+    findings = []
+    for subject in store.subjects("door-number:"):
+        number = subject.split(":", 1)[1]
+        if number in in_model or number in conflicts:
+            continue
+        width, label = store.one(subject, "clear_width"), f"Door {number}"
+        if width is None:
+            shown = store.one(subject, "shown_on")
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Clear width not written on the drawing",
+                                     required=required, why=why, sources=_sources(shown), assumptions=door_assumptions,
+                                     question=f"What is the clear width of door {number}?"))
+            continue
+        passed, width_mm, limit_mm, gap, note = _width_verdict(width, min_in, min_mm)
+        if passed and width.confidence == "low":
+            # An uncertain reading must never pass: a false pass is the worst result.
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label,
+                                     measured=f"{fmt_length(float(width.value), width.unit)} clear width, read with low confidence",
+                                     required=required, why=why, sources=_sources(width), location=width.location,
+                                     confidence="low", assumptions=door_assumptions,
+                                     question=f"Confirm the clear width of door {number}: the reading is uncertain."))
+            continue
+        findings.append(_finding(
+            rule, Status.PASS if passed else Status.FAIL, subject, label,
+            measured=f"{fmt_length(float(width.value), width.unit)} clear width", required=required, gap=gap, why=why,
+            sources=_sources(width), location=width.location, confidence=width.confidence,
+            assumptions=door_assumptions + note,
+            evidence=Evidence(measured=width_mm, limit=limit_mm, limit_unit="in", facts=[width])))
+    return findings
+
+
 def check_door_clear_width(rule: Rule, store: FactStore, profile: ShipProfile) -> list[Finding]:
     min_in, min_mm = float(rule.params["min_in"]), float(rule.params["min_mm"])
     required = f"At least {min_in:g} in ({min_mm:g} mm) clear width"
@@ -129,14 +178,8 @@ def check_door_clear_width(rule: Rule, store: FactStore, profile: ShipProfile) -
         if numbers and numbers.value in conflicts:
             continue
         label = door_label(store, subject)
-        # The inch figure governs. The metric one is a rounded conversion: 32 in is 812.8 mm, not 815 mm.
-        width_mm = to_mm(float(width.value), width.unit)
-        limit_mm = to_mm(min_in, "in")
-        passed = width_mm >= limit_mm
-        door_assumptions = list(assumptions)
-        if passed and width_mm < min_mm:
-            door_assumptions.append(f"Meets {min_in:g} in, but is under the rule's rounded {min_mm:g} mm figure. The inch value is used.")
-        gap = "" if passed else f"{(limit_mm - width_mm) / 25.4:.1f} in ({limit_mm - width_mm:.0f} mm) short"
+        passed, width_mm, limit_mm, gap, note = _width_verdict(width, min_in, min_mm)
+        door_assumptions = assumptions + note
         compartment = store.one(subject, "compartment")
         status, question = Status.PASS if passed else Status.FAIL, ""
         if (not passed and rule.params.get("stairway_door_exception") and compartment
@@ -148,7 +191,9 @@ def check_door_clear_width(rule: Rule, store: FactStore, profile: ShipProfile) -
             rule, status, subject, label,
             where=str(deck.value) if deck else "", measured=f"{fmt_length(float(width.value), width.unit)} clear width",
             required=required, gap=gap if status == Status.FAIL else "", why=why, sources=_sources(width), location=width.location,
-            confidence="medium", assumptions=door_assumptions, question=question))
+            confidence="medium", assumptions=door_assumptions, question=question,
+            evidence=Evidence(measured=width_mm, limit=limit_mm, limit_unit="in", facts=[width])))
+    findings += _drawing_doors(rule, store, conflicts, required, assumptions, why)
     for number, widths in sorted(conflicts.items()):
         findings.append(_finding(
             rule, Status.CONFLICT, f"door-number:{number}", f"Door {number}",
@@ -194,7 +239,8 @@ def check_stair_width(rule: Rule, store: FactStore, profile: ShipProfile) -> lis
         if mm < min_mm:
             findings.append(_finding(rule, Status.FAIL, subject, label, measured=measured,
                                      gap=f"{min_mm - mm:.0f} mm short", sources=sources, location=location,
-                                     confidence="high", **common))
+                                     confidence="high", evidence=Evidence(measured=mm, limit=min_mm, limit_unit="mm", facts=[tread]),
+                                     **common))
         elif mm >= min_mm + allowance:
             findings.append(_finding(rule, Status.PASS, subject, label, measured=measured, sources=sources,
                                      location=location, confidence="medium", **common))

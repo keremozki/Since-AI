@@ -26,6 +26,20 @@ export interface Finding {
   location: Point | null;
   provisional: boolean;
   unconfirmed_label: string;
+  original_status: Status | null;
+  p_real: number | null;
+  gate_note: string;
+  reviewable: boolean;
+}
+
+export type Decision = "accept" | "reject" | "correct";
+
+export interface FeedbackBody {
+  rule_id: string;
+  subject: string;
+  decision: Decision;
+  corrected_value?: number;
+  corrected_unit?: string;
 }
 
 export interface ScopeDecision {
@@ -82,6 +96,7 @@ export interface UpdateResponse {
   spend: Spend;
   inputs: Inputs;
   reply?: string;
+  retrained?: boolean;
   cached?: boolean;
   dropped?: number;
 }
@@ -133,6 +148,8 @@ export const api = {
   },
   measure: (profile: string, body: unknown) =>
     jsonPost(`/api/measure?profile=${encodeURIComponent(profile)}`, body).then((r) => parse<UpdateResponse>(r)),
+  feedback: (profile: string, body: FeedbackBody) =>
+    jsonPost("/api/feedback", { profile, ...body }).then((r) => parse<UpdateResponse>(r)),
   reset: () => fetch("/api/reset", { method: "POST" }).then((r) => parse<{ ok: boolean }>(r)),
   inputs: () => fetch("/api/inputs").then((r) => parse<Inputs>(r)),
   removeModel: (profile: string) =>

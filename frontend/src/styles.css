@@ -182,3 +182,7 @@ select, input:not([type="file"]):not([type="range"]) {
   .middle { height: 70vh; }
   .chat { min-height: 300px; }
 }
+
+.review { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.review p { width: 100%; margin: 0; font-size: 0.85rem; }
+.review input { width: 7rem; }

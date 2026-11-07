@@ -1,0 +1,178 @@
+{
+  "synthetic": true,
+  "file": "syn_03_compliant_control.pdf",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 400,
+    "flag": "US",
+    "note": "Synthetic passenger ship; PVAG V201.1.1 scope (> 150 passengers) is met."
+  },
+  "limits": {
+    "PVAG-V404.2.3": "32 in (815 mm) min",
+    "PVAG-V403.5.1": "36 in (915 mm) min",
+    "PVAG-V405.2": "1:12 max"
+  },
+  "facts": [
+    {
+      "subject": "door-number:501",
+      "property": "clear_width",
+      "value": 32.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D501 CL OPG 32\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:502",
+      "property": "clear_width",
+      "value": 34.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D502 CL OPG 34\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:503",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D503 CL OPG 36\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:504",
+      "property": "clear_width",
+      "value": 865.0,
+      "unit": "mm",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D504 CL OPG 865 mm"
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:505",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D505 CL OPG 3'-0\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:506",
+      "property": "clear_width",
+      "value": 33.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D506 CL OPG 33\""
+      },
+      "confidence": "high",
+      "location": null
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:501",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:502",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:503",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:504",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:505",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:506",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "corridor:C5-1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": false,
+      "stated": "48\""
+    },
+    {
+      "subject": "corridor:C5-2",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant, exactly at limit",
+      "app_has_check": false,
+      "stated": "36\""
+    },
+    {
+      "subject": "ramp:R5-1",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": false,
+      "stated": "1:14"
+    }
+  ]
+}

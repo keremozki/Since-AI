@@ -1,0 +1,217 @@
+{
+  "synthetic": true,
+  "file": "syn_01_mixed.pdf",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 400,
+    "flag": "US",
+    "note": "Synthetic passenger ship; PVAG V201.1.1 scope (> 150 passengers) is met."
+  },
+  "limits": {
+    "PVAG-V404.2.3": "32 in (815 mm) min",
+    "PVAG-V403.5.1": "36 in (915 mm) min",
+    "PVAG-V405.2": "1:12 max"
+  },
+  "facts": [
+    {
+      "subject": "door-number:301",
+      "property": "clear_width",
+      "value": 34.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D301 CL OPG 34\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:302",
+      "property": "clear_width",
+      "value": 30.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D302 CL OPG 30\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:303",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D303 CL OPG 36\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:304",
+      "property": "clear_width",
+      "value": 31.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D304 CL OPG 31\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:305",
+      "property": "clear_width",
+      "value": 33.5,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D305 CL OPG 33 1/2\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:306",
+      "property": "clear_width",
+      "value": 28.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D306 CL OPG 28\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:307",
+      "property": "clear_width",
+      "value": 32.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D307 CL OPG 32\""
+      },
+      "confidence": "high",
+      "location": null
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:301",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:302",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:303",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:304",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:305",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:306",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:307",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant, exactly at limit",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:308",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "cant_tell",
+      "violation": true,
+      "note": "INJECTED: width not shown",
+      "app_has_check": true
+    },
+    {
+      "subject": "corridor:C3-1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": false,
+      "stated": "42\""
+    },
+    {
+      "subject": "corridor:C3-2",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow",
+      "app_has_check": false,
+      "stated": "34\""
+    },
+    {
+      "subject": "ramp:R3-1",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant, exactly at limit",
+      "app_has_check": false,
+      "stated": "1:12"
+    },
+    {
+      "subject": "ramp:R3-2",
+      "rule_id": "PVAG-V405.2",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too steep",
+      "app_has_check": false,
+      "stated": "1:10"
+    }
+  ]
+}

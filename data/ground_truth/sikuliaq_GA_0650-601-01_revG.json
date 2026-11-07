@@ -1,0 +1,28 @@
+{
+  "synthetic": false,
+  "file": "sikuliaq_GA_0650-601-01_revG.pdf",
+  "labelled_by": "hand, from the PDF's OCR text layer and the rendered sheets, 7 Nov 2026",
+  "drawing": "R/V Sikuliaq General Arrangement, dwg 0650-601-01 rev G (as-built), 8 sheets, scale 3/32\"=1'-0\" (half-size print)",
+  "source_url": "https://ops.sikuliaq.alaska.edu/cruise-planning/vessel-layout (General Arrangement link, Google Drive id 1ragDekyjXkPdG637O_vmsxdZQs-Cu-Ky)",
+  "license": "not stated; site says Copyright 2025 University of Alaska Fairbanks. Kept in data/restricted, not committed.",
+  "profile": {"ship_type": "research", "passengers": 0, "flag": "US",
+              "note": "Research vessel, so the PVAG door rule is out of scope. Used to test reading, not verdicts."},
+  "facts": [
+    {"subject": "ship", "property": "length_overall", "value": 3138.0, "unit": "in",
+     "source": {"kind": "document", "file": "sikuliaq_GA_0650-601-01_revG.pdf", "locator": "sheet 1, principal characteristics",
+                "quote": "LENGTH OVERALL 261'-6\""}, "confidence": "high", "location": null}
+  ],
+  "ambiguous_facts": [
+    {"subject": "ship", "property": "beam", "stated": "BEAM, MAXIMUM 52'-0\" (under PRINCIPAL CHARACTERISTICS (MOLDED))",
+     "why": "The app's vocabulary wants the moulded beam at the main deck and says never to use an overall beam. The sheet says 'maximum' under a 'molded' heading. A careful reader may report it or skip it; both are defensible. Not scored."},
+    {"subject": "masthead_forward", "property": "height_above_hull", "stated": "MASTHEAD LIGHT (WHITE, MASTHEAD) 38'-6\" ABOVE MAIN DECK (sheet 2)",
+     "why": "The vessel has two masthead lights (a masthead/towing light on the mast and a masthead light forward), and COLREG measures above the uppermost continuous deck, which the sheet doesn't confirm is the main deck. Not scored."}
+  ],
+  "absent_facts": [
+    {"subject": "door-number:*", "property": "clear_width",
+     "why": "Doors are shown by swing symbols and compartment numbers (e.g. 01-16-2) only. No clear opening is written anywhere. A correct reader returns no door width facts."},
+    {"subject": "ship", "property": "persons_on_board", "why": "Not stated on the GA sheets."}
+  ],
+  "ocr_note": "The text layer is OCR of a scan and has errors (\"38-6*\" for 38'-6\", \"3/32\"=r'0'\"). Good for testing a reader against noisy text.",
+  "expected": []
+}

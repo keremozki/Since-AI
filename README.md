@@ -70,6 +70,31 @@ can be removed, and the checks rerun at once. The app holds one 3D model at a ti
 - A removed drawing can be added again at no cost, because its facts are cached.
 - The 3D view exists only for the RCRV. Other models are checked, but aren't shown in the viewer.
 
+## Confidence gate (learns from engineers)
+
+On each door or stair fail, the engineer presses **Accept** (real), **Reject** (misread), or **Correct**
+(misread, with the right value). Each answer is one row in `ship-data/confidence/labels.jsonl`. From 30
+labels a logistic regression (`backend/app/confidence.py`) predicts P(real fail), retrained every 5
+labels, with each version saved. A fail with P(real) under 0.7, or with low reading confidence, is shown
+as can't tell with the reason. The gate never creates a fail and never touches a pass.
+
+The model learns only from engineers' answers. `tools/simulate_labels.py` makes SIMULATED labels to test
+the pipeline; the app ignores them unless `CONFIDENCE_ALLOW_SYNTHETIC=1`, and then names them in every note.
+`backend/app/logreg.py` is the same model written from the course formulas in NumPy (`CONFIDENCE_ENGINE=numpy`).
+
+## Reading vector PDFs with code
+
+`backend/app/drawing.py` reads a PDF's text layer with no API: door tags, clear widths in any unit
+(`2'-8"`, `31 7/8"`, `815 mm`), door schedules, and table rows, even rotated. It never scales a size off
+the lines. Each fact records how it was read (pairing distance, ambiguity, OCR, scale), which the
+confidence model uses. A reading with low confidence never passes. The AI reader runs only when code
+finds nothing, or on every file with `CROSS_CHECK_READERS=1`.
+
+```bash
+.venv/Scripts/python tools/validate_data.py        # reader and checks vs every truth file in data/
+.venv/Scripts/python tools/reader_benchmark.py     # hard SYNTHETIC sheets: false passes, misreads, learning curve
+```
+
 ## Spending cap
 
 AI calls stop at `BUDGET_USD` (default $4.00), tracked in `ship-data/usage.json`. Facts read from a file

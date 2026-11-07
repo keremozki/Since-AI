@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Accuracy, api, Finding, Inputs, MeasureTarget, Profile, RunResult, Spend, Status, UpdateResponse } from "./api";
+import { Accuracy, api, Decision, Finding, Inputs, MeasureTarget, Profile, RunResult, Spend, Status, UpdateResponse } from "./api";
 import ShipViewer, { Measurement, STATUS_COLOR } from "./ShipViewer";
 
 const STATUS_ORDER: Status[] = ["fail", "conflict", "cant_tell", "pass"];
@@ -58,6 +58,17 @@ export default function App() {
     setLines((current) => [...current, ...notes]);
   }, []);
 
+  const review = useCallback(async (finding: Finding, decision: Decision, value?: number, unit?: string) => {
+    setError("");
+    try {
+      const update = await api.feedback(profileId, { rule_id: finding.rule_id, subject: finding.subject, decision,
+                                                     corrected_value: value, corrected_unit: unit });
+      applyUpdate(update, `Review saved for ${finding.label}: ${decision}.${update.retrained ? " The confidence model was retrained." : ""}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The review couldn't be saved.");
+    }
+  }, [profileId, applyUpdate]);
+
   const reset = async () => {
     await api.reset();
     setLines([]);
@@ -89,7 +100,7 @@ export default function App() {
         <div className="middle">
           <ShipViewer findings={result?.findings ?? []} selected={selected} onSelect={setSelected} measuring={measuring}
             onMeasured={setMeasurement} modelVisible={inputs?.model.has_view ?? null} modelActive={inputs?.model.active ?? true} />
-          {selected && <FindingDetail finding={selected} />}
+          {selected && <FindingDetail finding={selected} onReview={review} />}
         </div>
         <aside className="side">
           <InputsPanel profileId={profileId} inputs={inputs} onDone={(update, intro) => { setMeasuring(false); applyUpdate(update, intro); }} onError={setError} />
@@ -178,7 +189,11 @@ function Scoreboard() {
   );
 }
 
-function FindingDetail({ finding }: { finding: Finding }) {
+type Review = (finding: Finding, decision: Decision, value?: number, unit?: string) => void;
+
+function FindingDetail({ finding, onReview }: { finding: Finding; onReview: Review }) {
+  const [value, setValue] = useState("");
+  const [unit, setUnit] = useState("mm");
   const rows: [string, string][] = [
     ["Where", finding.where], ["Found", finding.measured], ["Required", finding.required], ["Gap", finding.gap],
     ["Rule", finding.rule_source], ["Why it applies", finding.why], ["Confidence", finding.confidence],
@@ -191,7 +206,23 @@ function FindingDetail({ finding }: { finding: Finding }) {
         {rows.filter(([, value]) => value).map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
         {finding.assumptions.map((text) => <div key={text}><dt>Assumption</dt><dd>{text}</dd></div>)}
         {finding.unconfirmed_label && <div><dt>Note</dt><dd>{finding.unconfirmed_label}</dd></div>}
+        {finding.gate_note && <div><dt>Held back</dt><dd>{finding.gate_note}</dd></div>}
+        {finding.p_real !== null && <div><dt>P(real fail)</dt><dd>{finding.p_real.toFixed(2)}</dd></div>}
       </dl>
+      {finding.reviewable && (
+        <div className="review" aria-label="Engineer review">
+          <p>Is this fail real? Your answer trains the confidence model.</p>
+          <button type="button" onClick={() => onReview(finding, "accept")}>Accept: real fail</button>
+          <button type="button" onClick={() => onReview(finding, "reject")}>Reject: misread</button>
+          <span>
+            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Correct value" aria-label="Correct value" />
+            <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
+              <option>mm</option><option>in</option><option>m</option><option>ft</option>
+            </select>
+            <button type="button" disabled={!value} onClick={() => { onReview(finding, "correct", Number(value), unit); setValue(""); }}>Correct</button>
+          </span>
+        </div>
+      )}
     </section>
   );
 }
