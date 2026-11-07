@@ -252,6 +252,96 @@ def check_stair_width(rule: Rule, store: FactStore, profile: ShipProfile) -> lis
     return findings
 
 
+def check_corridor_width(rule: Rule, store: FactStore, profile: ShipProfile) -> list[Finding]:
+    min_in, reduced_in = float(rule.params["min_in"]), float(rule.params["reduced_in"])
+    required = f"At least {min_in:g} in clear width"
+    why = "Walking surfaces have a minimum clear width."
+    subjects = store.subjects("corridor:")
+    if not subjects:
+        return [_finding(rule, Status.CANT_TELL, "corridors", "Corridors", measured="No corridor widths in the design data",
+                         required=required, why=why, question="Add a drawing that gives corridor clear widths.")]
+    exceptions = ["Exceptions allow 32 in for short segments, or on a ship whose largest deck is under 3,000 sq ft. "
+                  "Segment length and deck area aren't known."]
+    findings = []
+    for subject in subjects:
+        name = subject.split(":", 1)[1]
+        label = f"Corridor {name}"
+        try:
+            width = _value(store, subject, "clear_width")
+        except _Blocked as blocked:
+            findings += _waiting(rule, blocked, label)
+            continue
+        if width is None:
+            continue
+        mm, limit = to_mm(float(width.value), width.unit), to_mm(min_in, "in")
+        common = dict(measured=f"{fmt_length(float(width.value), width.unit)} clear width", required=required, why=why,
+                      sources=_sources(width), location=width.location, confidence=width.confidence)
+        evidence = Evidence(measured=mm, limit=limit, limit_unit="in", facts=[width])
+        if mm >= limit and width.confidence == "low":
+            # An uncertain reading must never pass.
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common,
+                                     question=f"Confirm the clear width of corridor {name}: the reading is uncertain."))
+        elif mm >= limit:
+            findings.append(_finding(rule, Status.PASS, subject, label, **common, evidence=evidence))
+        elif mm >= to_mm(reduced_in, "in"):
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common, assumptions=exceptions,
+                                     question=f"Corridor {name} is under {min_in:g} in but at least {reduced_in:g} in. "
+                                              "Is it a short segment, or is the largest deck under 3,000 sq ft?"))
+        else:
+            findings.append(_finding(rule, Status.FAIL, subject, label, **common, evidence=evidence,
+                                     gap=f"{(limit - mm) / 25.4:.1f} in ({limit - mm:.0f} mm) short"))
+    return findings
+
+
+def _ramp_slope(store: FactStore, subject: str) -> tuple[float, list[Fact]] | None:
+    """Running slope as rise over run. Code does the division, never the AI."""
+    rise, run = _value(store, subject, "rise"), _value(store, subject, "run")
+    if rise and run and to_mm(float(run.value), run.unit) > 0:
+        return to_mm(float(rise.value), rise.unit) / to_mm(float(run.value), run.unit), [rise, run]
+    ratio = _value(store, subject, "slope_run_per_rise")
+    if ratio and float(ratio.value) > 0:
+        return 1 / float(ratio.value), [ratio]
+    return None
+
+
+def check_ramp_slope(rule: Rule, store: FactStore, profile: ShipProfile) -> list[Finding]:
+    steepest = float(rule.params["max_run_per_rise"])
+    required = f"No steeper than 1:{steepest:g}"
+    why = "Ramp runs have a maximum running slope."
+    subjects = store.subjects("ramp:")
+    if not subjects:
+        return [_finding(rule, Status.CANT_TELL, "ramps", "Ramps", measured="No ramps in the design data",
+                         required=required, why=why, question="Add a drawing that gives ramp rise and run, or slope.")]
+    assumptions = ["In alterations, steeper slopes up to 1:8 are allowed for small rises (Table V405.2). New construction is assumed."]
+    findings = []
+    for subject in subjects:
+        name = subject.split(":", 1)[1]
+        label = f"Ramp {name}"
+        try:
+            found = _ramp_slope(store, subject)
+        except _Blocked as blocked:
+            findings += _waiting(rule, blocked, label)
+            continue
+        if found is None:
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Slope, or rise and run, not stated",
+                                     required=required, why=why, question=f"What is the slope of ramp {name}, or its rise and run?"))
+            continue
+        slope, facts = found
+        unsure = any(f.confidence == "low" for f in facts)
+        common = dict(measured=f"Slope 1:{1 / slope:.1f}" if slope > 0 else "Level", required=required, why=why,
+                      sources=_sources(*facts), location=facts[0].location,
+                      confidence="low" if unsure else facts[0].confidence, assumptions=assumptions)
+        if slope <= 1 / steepest and unsure:
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common,
+                                     question=f"Confirm the slope of ramp {name}: the reading is uncertain."))
+        elif slope <= 1 / steepest:
+            findings.append(_finding(rule, Status.PASS, subject, label, **common))
+        else:
+            findings.append(_finding(rule, Status.FAIL, subject, label, **common,
+                                     gap=f"{slope * steepest - 1:.0%} steeper than 1:{steepest:g}"))
+    return findings
+
+
 def _persons_on_board(store: FactStore) -> Fact | None:
     """A stated total, or crew plus science when both are stated. Code does the sum, never the AI."""
     stated = _value(store, "ship", "persons_on_board")
@@ -430,6 +520,8 @@ def check_consistency(store: FactStore) -> list[Finding]:
 CHECKS: dict[str, Callable[[Rule, FactStore, ShipProfile], list[Finding]]] = {
     "door_clear_width": check_door_clear_width,
     "stair_width": check_stair_width,
+    "corridor_width": check_corridor_width,
+    "ramp_slope": check_ramp_slope,
     "raft_capacity": check_raft_capacity,
     "bridge_visibility": check_bridge_visibility,
     "masthead_height": check_masthead_height,
