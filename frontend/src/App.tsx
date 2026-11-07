@@ -116,7 +116,8 @@ export default function App() {
     setMeasuring(false);
     setSelected(null);
     setQuestion("");
-    setInputsNote("Added files, measurements, and chat answers removed.");
+    setInputsNote("Added files, measurements, chat answers, and ship card answers removed.");
+    setCardVersion((version) => version + 1);
     refresh(profileId);
   };
 

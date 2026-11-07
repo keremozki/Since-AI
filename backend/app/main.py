@@ -294,8 +294,15 @@ class AppState:
         }
 
     def reset(self) -> None:
+        """Start a new ship. Everything said about this one goes, so it can't change which rules apply to the next.
+
+        Review answers stay: they teach the reader and the model about drawings, not about one ship.
+        """
         self.added, self.history, self.files = [], [], []
         self.added_file.unlink(missing_ok=True)
+        self.card_confirmed, self.overlays = [], {}
+        self.card_file.unlink(missing_ok=True)
+        self.overlays_file.unlink(missing_ok=True)
         self._save_inputs()
 
     def ship_card(self, extra: list[dict] | None = None) -> ShipCard:

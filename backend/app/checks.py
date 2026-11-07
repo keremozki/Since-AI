@@ -59,19 +59,23 @@ PLAIN_NAMES = {
     "count": "Number",
     "accessible_route": "On accessible route",
 }
-NAMED_SUBJECTS = {"door-number": "Door", "corridor": "Corridor", "ramp": "Ramp"}
+NAMED_SUBJECTS = {"door-number": "Door", "corridor": "Corridor", "ramp": "Ramp", "stair": "Stair"}
 
 
 def _plain(prop: str) -> str:
     return PLAIN_NAMES.get(prop, prop.replace("_", " ").capitalize())
 
 
+def _named(subject: str, prop: str) -> str:
+    """A value in plain words, saying whose it is: "Crew count", or "Corridor C2 clear width"."""
+    kind, _, label = subject.partition(":")
+    name = _plain(prop)
+    return f"{NAMED_SUBJECTS[kind]} {label} {name.lower()}" if label and kind in NAMED_SUBJECTS else name
+
+
 def describe_fact(fact: Fact) -> str:
     """A recorded fact in plain words, like "Crew count: 12 persons" or "Corridor C2 clear width: 30 in"."""
-    kind, _, label = fact.subject.partition(":")
-    owner = f"{NAMED_SUBJECTS[kind]} {label} " if label and kind in NAMED_SUBJECTS else ""
-    name = _plain(fact.property)
-    return f"{owner}{name.lower() if owner else name}: {_show(fact)}"
+    return f"{_named(fact.subject, fact.property)}: {_show(fact)}"
 
 
 # Unit conversion in floating point: 4 in / 48 in becomes 101.6 mm / 1219.2 mm and can land a hair
@@ -907,11 +911,12 @@ def check_consistency(store: FactStore) -> list[Finding]:
         if facts:
             located = next((f.location for f in facts if f.location), None)
             values = list(dict.fromkeys(_show(f) for f in facts))
-            findings.append(_finding(CONSISTENCY_RULE, Status.CONFLICT, f"{subject}.{prop}", _plain(prop),
+            label = _named(subject, prop)
+            findings.append(_finding(CONSISTENCY_RULE, Status.CONFLICT, f"{subject}.{prop}", label,
                                      measured=" vs. ".join(values), required="One agreed value",
                                      why="Sources disagree, so at least one is wrong.",
                                      sources=[f"{_show(f)}: {f.source.describe()}" for f in facts], location=located,
-                                     question=f"Which {_plain(prop).lower()} is correct?"))
+                                     question=f"Which {label[0].lower() + label[1:]} is correct?"))
     return findings
 
 

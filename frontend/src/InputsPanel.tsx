@@ -130,7 +130,7 @@ export default function InputsPanel({ profileId, inputs, result, note, onDone, o
       </ul>
       {hasAdded && (
         <button type="button" className="link-button" disabled={disabled} onClick={() => {
-          if (window.confirm("Remove all added files, measurements, and chat answers? The 3D model stays.")) onStartOver();
+          if (window.confirm("Remove all added files, measurements, chat answers, and ship card answers? The 3D model stays.")) onStartOver();
         }}>Remove everything except the 3D model</button>
       )}
     </div>

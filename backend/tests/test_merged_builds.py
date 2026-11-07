@@ -168,6 +168,35 @@ def test_the_ship_card_decides_corridors_and_ramps_like_doors(app_state, rule_id
     assert decision["status"] == "applies" and "V201.1.1" in decision["clause"]
 
 
+def test_starting_over_clears_ship_card_answers_so_they_cant_reach_the_next_ship(app_state):
+    state, client = app_state
+    state.confirm_card("length_overall_m", 299.8, "m", "Eric")
+    assert client.get("/api/shipcard").json()["card"]["fields"]["length_overall_m"]["value"] == 299.8
+    assert client.post("/api/reset").status_code == 200
+    assert "length_overall_m" not in client.get("/api/shipcard").json()["card"]["fields"]
+    again = AppState(state.data_dir, ROOT / "rules" / "rules.yaml", ROOT / "docs" / "rules", claude=object())
+    assert again.card_confirmed == []  # also after a restart
+
+
+def test_starting_over_keeps_review_answers_because_they_teach_about_drawings(app_state):
+    state, client = app_state
+    state.add_facts([read_value(value=30.0, raw='30"')])
+    answer(client, "accept")
+    client.post("/api/reset")
+    assert client.get("/api/confidence").json()["labels_used"] == 1
+
+
+@pytest.mark.parametrize("subject, label", [
+    ("door-number:5110", "Door 5110 clear width"), ("stair:C", "Stair C clear width"), ("ship", "Clear width")])
+def test_a_conflict_says_whose_value_it_is(subject, label):
+    from app.checks import check_consistency
+
+    def stated(value, file):
+        return Fact(subject=subject, property="clear_width", value=value, unit="mm", source=Source(kind=SourceKind.DOCUMENT, file=file))
+
+    assert check_consistency(FactStore([stated(1000.0, "a.pdf"), stated(900.0, "b.pdf")]))[0].label == label
+
+
 def test_a_scan_code_cant_read_still_falls_back_to_the_whole_page_ai_read(app_state, monkeypatch):
     from app import ingest
     from app.reading import pipeline

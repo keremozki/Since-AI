@@ -1,6 +1,6 @@
 # Scoreboard: synthetic package meyer-style-v1
 
-Made 2026-11-07 14:35 with AI mode offline: 25 recorded AI answers replayed, 0 AI request(s) waiting. No AI was called.
+Made 2026-11-07 15:55 with AI mode offline: 28 recorded AI answers replayed, 0 AI request(s) waiting. No AI was called.
 
 The package is synthetic and team-made: this is a regression and reading test, not a validation on real Meyer data. A false pass here means a pass where truth.json says anything else.
 
@@ -114,7 +114,7 @@ The engineer answered 4 ship card question(s): length_overall_m = 299.8 m, propu
   "changes_outside_the_rule": 0
  },
  "missing_data": {
-  "checks": 94,
+  "checks": 99,
   "false_passes": 0
  }
 }
