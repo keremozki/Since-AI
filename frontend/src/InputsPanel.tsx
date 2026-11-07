@@ -2,6 +2,8 @@ import { DragEvent, useRef, useState } from "react";
 import { api, Inputs, RunResult, UpdateResponse } from "./api";
 import { originsOf } from "./shared";
 
+const MAX_LISTED_FACTS = 5;
+
 export default function InputsPanel({ profileId, inputs, result, note, onDone, onError, onStartOver }: {
   profileId: string;
   inputs: Inputs | null;
@@ -99,7 +101,13 @@ export default function InputsPanel({ profileId, inputs, result, note, onDone, o
             <span>
               <strong>{file.name}</strong>
               <small>{file.facts} fact(s) read · {resultsFrom(file.name)} result(s)</small>
-              {file.facts > 0 && resultsFrom(file.name) === 0 && <small className="unused">Read, but no check uses these facts yet.</small>}
+              {file.facts > 0 && resultsFrom(file.name) === 0 && (
+                <>
+                  {file.read.slice(0, MAX_LISTED_FACTS).map((text) => <small key={text}>{text}</small>)}
+                  {file.read.length > MAX_LISTED_FACTS && <small>And {file.read.length - MAX_LISTED_FACTS} more.</small>}
+                  <small className="unused">Not in a result yet. A check may still need other values, or may not apply to this ship. Values are also compared across files.</small>
+                </>
+              )}
             </span>
             <button type="button" disabled={disabled} aria-label={`Remove ${file.name}`}
               onClick={() => act("Removing the file.", () => api.removeFile(profileId, file.name), () => `${file.name} removed.`)}>Remove</button>

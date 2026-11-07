@@ -134,7 +134,7 @@ export interface RecordedFact {
 
 export interface Inputs {
   model: { name: string; parts: number; has_view: boolean; active: boolean };
-  files: { name: string; facts: number }[];
+  files: { name: string; facts: number; read: string[] }[];
   measurements: number;
   chat: number;
 }

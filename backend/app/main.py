@@ -172,11 +172,14 @@ class AppState:
         def count(kind: SourceKind) -> int:
             return sum(f.source.kind == kind for f in self.added)
 
+        def file_entry(name: str) -> dict:
+            read = [f for f in self.added if f.source.kind in FILE_KINDS and f.source.file == name]
+            return {"name": name, "facts": len(read), "read": [describe_fact(f) for f in read]}
+
         return {
             "model": {"name": self.model_name, "parts": self.model_parts, "has_view": self.has_view,
                       "active": self.active_model is not None},
-            "files": [{"name": name, "facts": sum(f.source.kind in FILE_KINDS and f.source.file == name for f in self.added)}
-                      for name in self.file_names()],
+            "files": [file_entry(name) for name in self.file_names()],
             "measurements": count(SourceKind.MEASUREMENT),
             "chat": count(SourceKind.CHAT),
         }

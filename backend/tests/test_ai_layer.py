@@ -137,7 +137,7 @@ def upload_note(api, name="note.txt"):
 def test_removing_a_file_removes_its_facts_and_reruns(tmp_path):
     api, state = client(tmp_path, FakeClaude({"facts": [raw("liferaft", "capacity_persons", 16, "")]}))
     upload_note(api)
-    assert api.get("/api/inputs").json()["files"] == [{"name": "note.txt", "facts": 1}]
+    assert api.get("/api/inputs").json()["files"] == [{"name": "note.txt", "facts": 1, "read": ["Liferaft capacity: 16"]}]
     body = api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "note.txt"}).json()
     assert body["inputs"]["files"] == []
     assert state.added == []
@@ -147,7 +147,7 @@ def test_removing_a_file_removes_its_facts_and_reruns(tmp_path):
 def test_a_file_with_no_facts_is_listed_and_removable(tmp_path):
     api, _ = client(tmp_path, FakeClaude({"facts": []}))
     upload_note(api)
-    assert api.get("/api/inputs").json()["files"] == [{"name": "note.txt", "facts": 0}]
+    assert api.get("/api/inputs").json()["files"] == [{"name": "note.txt", "facts": 0, "read": []}]
     api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "note.txt"})
     assert api.get("/api/inputs").json()["files"] == []
 
