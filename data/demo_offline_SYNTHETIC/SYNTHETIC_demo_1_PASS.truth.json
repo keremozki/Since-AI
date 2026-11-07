@@ -1,0 +1,53 @@
+{
+  "synthetic": true,
+  "file": "SYNTHETIC_demo_1_PASS.pdf",
+  "profile_in_app": "passenger-test",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 200,
+    "flag": "US"
+  },
+  "facts": [
+    {
+      "subject": "door-number:101",
+      "property": "clear_width",
+      "value": 34,
+      "unit": "in"
+    },
+    {
+      "subject": "corridor:C1",
+      "property": "clear_width",
+      "value": 1200,
+      "unit": "mm"
+    },
+    {
+      "subject": "ramp:R1",
+      "property": "slope_run_per_rise",
+      "value": 14,
+      "unit": ""
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:101",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "note": "34 in >= 32 in",
+      "violation": false
+    },
+    {
+      "subject": "corridor:C1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "note": "1200 mm >= 36 in (914.4 mm)",
+      "violation": false
+    },
+    {
+      "subject": "ramp:R1",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "note": "1:14 is shallower than 1:12",
+      "violation": false
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "synthetic": true,
+  "file": "SYNTHETIC_demo_2_FAIL.pdf",
+  "profile_in_app": "passenger-test",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 200,
+    "flag": "US"
+  },
+  "facts": [
+    {
+      "subject": "door-number:201",
+      "property": "clear_width",
+      "value": 30,
+      "unit": "in"
+    },
+    {
+      "subject": "corridor:C2",
+      "property": "clear_width",
+      "value": 30,
+      "unit": "in"
+    },
+    {
+      "subject": "ramp:R2",
+      "property": "rise",
+      "value": 150,
+      "unit": "mm"
+    },
+    {
+      "subject": "ramp:R2",
+      "property": "run",
+      "value": 1500,
+      "unit": "mm"
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:201",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "note": "30 in < 32 in",
+      "violation": true
+    },
+    {
+      "subject": "corridor:C2",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "fail",
+      "note": "30 in < 32 in, below even the exception width",
+      "violation": true
+    },
+    {
+      "subject": "ramp:R2",
+      "rule_id": "PVAG-V405.2",
+      "expected": "fail",
+      "note": "1:10 is steeper than 1:12",
+      "violation": true
+    }
+  ]
+}

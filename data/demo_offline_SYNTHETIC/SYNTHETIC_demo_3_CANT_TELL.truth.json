@@ -1,0 +1,41 @@
+{
+  "synthetic": true,
+  "file": "SYNTHETIC_demo_3_CANT_TELL.pdf",
+  "profile_in_app": "passenger-test",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 200,
+    "flag": "US"
+  },
+  "facts": [
+    {
+      "subject": "corridor:C3",
+      "property": "clear_width",
+      "value": 34,
+      "unit": "in"
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:301",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "cant_tell",
+      "note": "door tagged, no width written",
+      "violation": true
+    },
+    {
+      "subject": "corridor:C3",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "note": "34 in: under 36 in, but V403.5.1 exceptions allow 32 in for short segments",
+      "violation": true
+    },
+    {
+      "subject": "ramp:R3",
+      "rule_id": "PVAG-V405.2",
+      "expected": "cant_tell",
+      "note": "slope text is rotated away from the ramp label, so it isn't used",
+      "violation": true
+    }
+  ]
+}

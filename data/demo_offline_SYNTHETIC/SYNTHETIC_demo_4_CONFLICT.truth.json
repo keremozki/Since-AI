@@ -1,0 +1,33 @@
+{
+  "synthetic": true,
+  "file": "SYNTHETIC_demo_4_CONFLICT.pdf",
+  "profile_in_app": "passenger-test",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 200,
+    "flag": "US"
+  },
+  "facts": [
+    {
+      "subject": "door-number:401",
+      "property": "clear_width",
+      "value": 34,
+      "unit": "in"
+    },
+    {
+      "subject": "door-number:401",
+      "property": "clear_width",
+      "value": 30,
+      "unit": "in"
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:401",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "conflict",
+      "note": "plan says 34 in, door schedule says 30 in",
+      "violation": true
+    }
+  ]
+}
