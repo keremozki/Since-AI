@@ -12,6 +12,8 @@ VOCABULARY = [
     (r"door-number:\d+", "shown_on", "text", "sheet or page where the door is tagged, when no width is written for it"),
     (r"door-type:.+", "clear_width", "length", "clear opening width for a door part type, by its exact name"),
     (r"corridor:.+", "clear_width", "length", "clear width of a corridor or walking surface, by its label on the drawing"),
+    (r"corridor:.+", "shown_on", "text", "sheet or page where the corridor is labelled, when no width is written for it"),
+    (r"ramp:.+", "shown_on", "text", "sheet or page where the ramp is labelled, when no slope or rise and run is written for it"),
     (r"ramp:.+", "rise", "length", "vertical rise of a ramp run"),
     (r"ramp:.+", "run", "length", "horizontal length of a ramp run"),
     (r"ramp:.+", "slope_run_per_rise", "number", "N from a slope written 1:N on the drawing. Only if written, never computed"),

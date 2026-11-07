@@ -22,6 +22,9 @@ CONSISTENCY_RULE = Rule(
 )
 RELATIVE_TOLERANCE = 0.005
 LENGTH_TOLERANCE_MM = 10.0
+# Unit conversion in floating point: 4 in / 48 in becomes 101.6 mm / 1219.2 mm and can land a hair
+# above 1/12. This only absorbs rounding error; it is far below any value a drawing can state.
+FLOAT_SLACK = 1e-9
 
 
 def _finding(rule: Rule, status: Status, subject: str, label: str, **fields) -> Finding:
@@ -272,8 +275,12 @@ def check_corridor_width(rule: Rule, store: FactStore, profile: ShipProfile) -> 
             findings += _waiting(rule, blocked, label)
             continue
         if width is None:
+            shown = store.one(subject, "shown_on")
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Clear width not written on the drawing",
+                                     required=required, why=why, sources=_sources(shown),
+                                     question=f"What is the clear width of corridor {name}?"))
             continue
-        mm, limit = to_mm(float(width.value), width.unit), to_mm(min_in, "in")
+        mm, limit = to_mm(float(width.value), width.unit), to_mm(min_in, "in") * (1 - FLOAT_SLACK)
         common = dict(measured=f"{fmt_length(float(width.value), width.unit)} clear width", required=required, why=why,
                       sources=_sources(width), location=width.location, confidence=width.confidence)
         evidence = Evidence(measured=mm, limit=limit, limit_unit="in", facts=[width])
@@ -283,7 +290,7 @@ def check_corridor_width(rule: Rule, store: FactStore, profile: ShipProfile) -> 
                                      question=f"Confirm the clear width of corridor {name}: the reading is uncertain."))
         elif mm >= limit:
             findings.append(_finding(rule, Status.PASS, subject, label, **common, evidence=evidence))
-        elif mm >= to_mm(reduced_in, "in"):
+        elif mm >= to_mm(reduced_in, "in") * (1 - FLOAT_SLACK):
             findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common, assumptions=exceptions,
                                      question=f"Corridor {name} is under {min_in:g} in but at least {reduced_in:g} in. "
                                               "Is it a short segment, or is the largest deck under 3,000 sq ft?"))
@@ -331,10 +338,11 @@ def check_ramp_slope(rule: Rule, store: FactStore, profile: ShipProfile) -> list
         common = dict(measured=f"Slope 1:{1 / slope:.1f}" if slope > 0 else "Level", required=required, why=why,
                       sources=_sources(*facts), location=facts[0].location,
                       confidence="low" if unsure else facts[0].confidence, assumptions=assumptions)
-        if slope <= 1 / steepest and unsure:
+        within = slope <= (1 / steepest) * (1 + FLOAT_SLACK)
+        if within and unsure:
             findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common,
                                      question=f"Confirm the slope of ramp {name}: the reading is uncertain."))
-        elif slope <= 1 / steepest:
+        elif within:
             findings.append(_finding(rule, Status.PASS, subject, label, **common))
         else:
             findings.append(_finding(rule, Status.FAIL, subject, label, **common,

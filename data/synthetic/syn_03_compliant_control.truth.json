@@ -96,6 +96,48 @@
       },
       "confidence": "high",
       "location": null
+    },
+    {
+      "subject": "corridor:C5-1",
+      "property": "clear_width",
+      "value": 48.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "CORRIDOR C5-1  CLEAR WIDTH 48\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "corridor:C5-2",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "CORRIDOR C5-2  CLEAR WIDTH 36\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "ramp:R5-1",
+      "property": "slope_run_per_rise",
+      "value": 14.0,
+      "unit": "",
+      "source": {
+        "kind": "document",
+        "file": "syn_03_compliant_control.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "RAMP R5-1 1:14"
+      },
+      "confidence": "high",
+      "location": null
     }
   ],
   "expected": [
@@ -153,7 +195,7 @@
       "expected": "pass",
       "violation": false,
       "note": "compliant",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "48\""
     },
     {
@@ -162,7 +204,7 @@
       "expected": "pass",
       "violation": false,
       "note": "compliant, exactly at limit",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "36\""
     },
     {
@@ -171,7 +213,7 @@
       "expected": "pass",
       "violation": false,
       "note": "compliant",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "1:14"
     }
   ]

@@ -28,7 +28,8 @@ from app.store import FactStore  # noqa: E402
 from app.units import is_length_unit, to_mm  # noqa: E402
 
 VALUE_FACTS = {"clear_width", "length_overall", "beam", "persons_on_board", "crew_complement", "science_complement",
-               "capacity_persons", "height_above_hull", "time_minutes", "lightship_weight"}
+               "capacity_persons", "height_above_hull", "time_minutes", "lightship_weight", "rise", "run",
+               "slope_run_per_rise"}
 
 
 def norm(fact: dict) -> tuple[str, str, float]:
@@ -89,7 +90,7 @@ def main() -> None:
     for pdf in sorted(p for folder in folders if folder.exists() for p in folder.rglob("*.pdf")):
         data = pdf.read_bytes()
         digest = hashlib.sha256(data).hexdigest()
-        if digest in seen or "bench" in pdf.parts:
+        if digest in seen or "bench" in pdf.parts or pdf.name in report:  # first copy by name wins
             continue
         seen.add(digest)
         read = read_pdf(data, pdf.name)
