@@ -9,13 +9,13 @@ import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import chat as chat_module
 from . import confidence
-from . import ingest, nwd
+from . import ingest, lessons, nwd
 from .engine import report_text, run
 from .llm import DEFAULT_CAP_USD, BudgetExceeded, Claude, Ledger, ModelRefused, load_env
 from .models import Fact, Point, RunResult, Source, SourceKind, Status
@@ -96,6 +96,16 @@ class AppState:
     def add_facts(self, facts: list[Fact]) -> None:
         self.added.extend(facts)
         self._save_added()
+
+    def drop_correction(self, label_key: str) -> None:
+        """Remove the engineer correction made with one answer (when it is answered again or undone)."""
+        kept = [f for f in self.added if not (f.source.kind == SourceKind.ENGINEER and f.meta.get("label_key") == label_key)]
+        if len(kept) != len(self.added):
+            self.added = kept
+            self._save_added()
+
+    def lessons_text(self) -> str:
+        return lessons.as_text(lessons.from_labels(self.gate.pool.rows(), allow_synthetic=self.gate.allow_synthetic))
 
     def add_file(self, name: str) -> None:
         if name not in self.files:
@@ -196,10 +206,11 @@ class FeedbackRequest(BaseModel):
     profile: str
     rule_id: str
     subject: str
-    decision: str  # accept, reject, or correct
+    decision: str  # accept (read correctly), reject (misread, value optional), or unsure
     corrected_value: float | None = None
     corrected_unit: str = ""
     note: str = ""
+    reviewer: str = ""
 
 
 class MeasureRequest(BaseModel):
@@ -321,11 +332,15 @@ def create_app(state: AppState | None = None) -> FastAPI:
         before = state.result(profile)
         name = file.filename or "upload"
         page_list = [int(p) for p in pages.replace(" ", "").split(",") if p.isdigit()] or None
+        data = await file.read()
         try:
             facts, cached, dropped = ingest.read_file(state.claude, state.data_dir / "extract-cache",
-                                                      name, await file.read(), page_list)
+                                                      name, data, page_list, lessons=state.lessons_text())
         except (BudgetExceeded, ModelRefused, ingest.TooManyPages, ValueError) as error:
             raise HTTPException(400, str(error)) from error
+        # Keep the file, so a reviewer can see the part of the drawing a value came from.
+        (state.data_dir / "uploads").mkdir(parents=True, exist_ok=True)
+        (state.data_dir / "uploads" / Path(name).name).write_bytes(data)
         known = {(f.subject, f.property, f.value, f.source.file) for f in state.added}
         fresh = [f for f in facts if (f.subject, f.property, f.value, f.source.file) not in known]
         state.add_file(name)
@@ -334,11 +349,31 @@ def create_app(state: AppState | None = None) -> FastAPI:
 
     @app.get("/api/confidence")
     def confidence_status():
-        return state.gate.status()
+        return state.gate.status() | {"lessons": lessons.from_labels(state.gate.pool.rows(),
+                                                                       allow_synthetic=state.gate.allow_synthetic)}
+
+    @app.get("/api/review-queue/{profile_id}")
+    def review_queue(profile_id: str, limit: int = 5):
+        """Fails to review next, most useful for learning first."""
+        result = state.result(profile_id)
+        order = state.gate.review_order(result.findings, state.store(profile_id))
+        return [{"rule_id": f.rule_id, "subject": f.subject, "label": f.label, "measured": f.measured,
+                 "status": f.status, "why_now": why} for f, _score, why in order[:limit]]
+
+    @app.get("/api/evidence")
+    def evidence(file: str, locator: str = ""):
+        """The part of an uploaded drawing that a value was read from, as a PNG."""
+        path = state.data_dir / "uploads" / Path(file).name
+        if not path.exists() or path.suffix.lower() != ".pdf":
+            raise HTTPException(404, "The drawing for this value isn't stored.")
+        png = ingest.crop(path.read_bytes(), locator)
+        if png is None:
+            raise HTTPException(404, "The location of this value isn't known.")
+        return Response(content=png, media_type="image/png")
 
     @app.post("/api/feedback")
     def feedback(request: FeedbackRequest):
-        """An engineer's verdict on a fail. These are the only labels the model ever learns from."""
+        """An engineer's answer: was this value read correctly? These are the only labels the model learns from."""
         before = state.result(request.profile)
         finding = next((f for f in before.findings if f.rule_id == request.rule_id and f.subject == request.subject
                         and f.reviewable), None)
@@ -347,11 +382,32 @@ def create_app(state: AppState | None = None) -> FastAPI:
         try:
             row = confidence.make_label(finding, state.store(request.profile), request.decision,
                                         corrected_value=request.corrected_value,
-                                        corrected_unit=request.corrected_unit, note=request.note)
+                                        corrected_unit=request.corrected_unit, note=request.note,
+                                        reviewer=request.reviewer)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
+        recorded = []
+        if row["corrected_value"] is not None and row["read"]:
+            read = row["read"]
+            recorded = [Fact(subject=read["subject"], property=read["property"], value=row["corrected_value"],
+                             unit=row["corrected_unit"], confidence="high",
+                             source=Source(kind=SourceKind.ENGINEER, file=read["file"],
+                                           locator=f"review of {read['locator'] or read['file'] or 'the reading'}",
+                                           quote=f"{request.reviewer or 'Engineer'}: was read as {read['value']} {read['unit']}"),
+                             meta={"label_key": row["key"]})]
+            state.drop_correction(row["key"])
+            state.add_facts(recorded)
         retrained = state.gate.record(row)
-        return rerun(before, request.profile, retrained=retrained, confidence=state.gate.status())
+        return rerun(before, request.profile, recorded=recorded, retrained=retrained, confidence=state.gate.status())
+
+    @app.delete("/api/feedback")
+    def undo_feedback(profile: str, key: str):
+        """Take an answer back: the label leaves the pool, its correction leaves the facts, the model refits."""
+        before = state.result(profile)
+        if state.gate.undo(key) is None:
+            raise HTTPException(404, "No saved answer has that key.")
+        state.drop_correction(key)
+        return rerun(before, profile, confidence=state.gate.status())
 
     @app.post("/api/measure")
     def measure(profile: str, request: MeasureRequest):

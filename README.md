@@ -72,15 +72,45 @@ can be removed, and the checks rerun at once. The app holds one 3D model at a ti
 
 ## Confidence gate (learns from engineers)
 
-On each door or stair fail, the engineer presses **Accept** (real), **Reject** (misread), or **Correct**
-(misread, with the right value). Each answer is one row in `ship-data/confidence/labels.jsonl`. From 30
-labels a logistic regression (`backend/app/confidence.py`) predicts P(real fail), retrained every 5
-labels, with each version saved. A fail with P(real) under 0.7, or with low reading confidence, is shown
-as can't tell with the reason. The gate never creates a fail and never touches a pass.
+**What the engineer answers:** "Was this value read correctly from the drawing?" They judge the reading,
+not the ship. Next to the question they see where the value came from: the file, the place on the page,
+the text it was read from, and a close-up of the drawing.
+
+| Button | Label |
+|---|---|
+| **Read correctly** | 1 |
+| **Misread** (the right value and unit are optional) | 0. A right value becomes an engineer fact that replaces the reading, and the check reruns |
+| **Not sure** | No label. Logged, never trained on |
+
+Each answer is one row in `ship-data/confidence/labels.jsonl`, with who gave it and when. Any answer can
+be undone; the model then refits without it. The model starts after **30 answers with at least 8 "read
+correctly" and 8 "misread"**. Before that a fixed rule applies (low reading confidence gives can't tell),
+and the screen says what is still needed. Misreads are rare (about 3% of fails), so the panel's "Review
+next" list shows the shakiest readings first, where misreads hide.
+
+A logistic regression (`backend/app/confidence.py`) predicts P(real fail), retrained every 5 answers, with
+each version saved. A fail with P(real) under 0.7, or with low reading confidence, is shown as can't tell
+with the reason. The gate never creates a fail and never touches a pass.
 
 The model learns only from engineers' answers. `tools/simulate_labels.py` makes SIMULATED labels to test
-the pipeline; the app ignores them unless `CONFIDENCE_ALLOW_SYNTHETIC=1`, and then names them in every note.
+the pipeline; the app ignores them unless `CONFIDENCE_ALLOW_SYNTHETIC=1`, and then shows a yellow
+SIMULATED LABELS band and names them in every note.
 `backend/app/logreg.py` is the same model written from the course formulas in NumPy (`CONFIDENCE_ENGINE=numpy`).
+
+### The AI reader learns from misreads
+
+The confidence model learns *when to doubt* a reading. `backend/app/lessons.py` makes the AI reader learn
+*not to repeat* one: every "misread" answer (with the right value, if given) goes into the next AI read as
+a worked example. It works from the first correction, with no training run. Lessons are passed as quoted
+data, never as instructions. To measure it on drawings the lessons did not come from:
+
+```bash
+.venv/Scripts/python tools/reader_learning.py --dry-run   # split and cost, no API
+.venv/Scripts/python tools/reader_learning.py             # needs ANTHROPIC_API_KEY
+```
+
+It reads every drawing with a truth file, turns the mistakes on half of them into corrections (the truth
+file stands in for the engineer), and compares the other half read with and without those lessons.
 
 ## Reading vector PDFs with code
 
@@ -126,3 +156,10 @@ hand-checked door set, faults seeded one at a time, and a run with all dimension
 - Stair width is read from tread length. A pass needs an extra margin for handrails, which is our own
   assumption, not a rule value.
 - The hackathon version uses the cloud Claude API. Private deployment would come later.
+- **No dimension is ever measured off the drawing lines.** The readers take only written values (labels,
+  tables, OCR). This is on purpose: a wrong value is worse than a missing one. So a door whose width isn't
+  written gives can't tell, and the question asks for it.
+- **The reader-specific learning signals are for PDFs.** 3D-model fails also pass through the confidence
+  gate, but we had no documentation of the 3D format to build reading signals for it. That is roadmap.
+- The synthetic test drawings and the code reader were written by the same team, so results on them are
+  optimistic. Drawings made by others (`data/synthetic/team/`) and real engineer answers are the real test.

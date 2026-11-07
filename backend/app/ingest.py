@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 import pymupdf
@@ -12,6 +13,7 @@ import pymupdf
 from . import drawing
 from .llm import Claude
 from .models import Fact, Source, SourceKind
+from .units import is_length_unit, to_mm
 from .vocabulary import FACT_SCHEMA, to_fact, vocabulary_text
 
 PROMPT_VERSION = "2"
@@ -87,8 +89,35 @@ def build_content(filename: str, data: bytes, pages: list[int] | None = None) ->
     return blocks + [{"type": "text", "text": f"File name: {filename}. Report the facts it states."}]
 
 
+CROP_HALF_PT = 160  # about 56 mm of paper on each side of the value
+_LOCATOR = re.compile(r"page\s+(\d+)(?:.*?\((\d+),\s*(\d+)\)\s*pt)?", re.IGNORECASE)
+
+
+def crop(data: bytes, locator: str) -> bytes | None:
+    """PNG of the drawing around a value: a close-up when the reader kept coordinates, else the page."""
+    match = _LOCATOR.search(locator or "")
+    if not match:
+        return None
+    document = pymupdf.open(stream=data, filetype="pdf")
+    number = int(match.group(1))
+    if not 1 <= number <= len(document):
+        return None
+    page = document[number - 1]
+    if match.group(2):
+        x, y = float(match.group(2)), float(match.group(3))
+        clip = pymupdf.Rect(x - CROP_HALF_PT, y - CROP_HALF_PT, x + CROP_HALF_PT, y + CROP_HALF_PT) & page.rect
+        return page.get_pixmap(matrix=pymupdf.Matrix(2.5, 2.5), clip=clip).tobytes("png")
+    zoom = 1000 / max(page.rect.width, page.rect.height)
+    return page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
+
+
+AGREE_MM = 1.0  # 32 in and 812.8 mm are the same value; rounding to whole mm stays within this
+
+
 def _same_value(a: Fact, b: Fact) -> bool:
     try:
+        if is_length_unit(a.unit) and is_length_unit(b.unit):
+            return abs(to_mm(float(a.value), a.unit) - to_mm(float(b.value), b.unit)) <= AGREE_MM
         return a.unit == b.unit and abs(float(a.value) - float(b.value)) < 1e-6
     except (TypeError, ValueError):
         return str(a.value) == str(b.value)
@@ -107,11 +136,12 @@ def merge_readers(vector: list[Fact], ai: list[Fact]) -> list[Fact]:
 
 
 def read_file(claude: Claude, cache_dir: Path, filename: str, data: bytes,
-              pages: list[int] | None = None) -> tuple[list[Fact], bool, int]:
+              pages: list[int] | None = None, lessons: str = "") -> tuple[list[Fact], bool, int]:
     """Return (accepted facts, whether the result came from cache, facts dropped by validation).
 
     A vector PDF is read by code first (free, exact, no API). The AI reader runs when code finds
     nothing, or on every file when CROSS_CHECK_READERS=1, so the two readers can confirm each other.
+    `lessons` (app.lessons.as_text) are engineers' past corrections, shown to the AI reader.
     """
     vector: list[Fact] = []
     if Path(filename).suffix.lower() == ".pdf":
@@ -124,19 +154,23 @@ def read_file(claude: Claude, cache_dir: Path, filename: str, data: bytes,
         if vector:
             return vector, False, 0
         raise ValueError(f"The drawing reader found no values in {filename}, and no API key is set for the AI reader.")
-    ai, cached, dropped = _read_with_ai(claude, cache_dir, filename, data, pages)
+    ai, cached, dropped = _read_with_ai(claude, cache_dir, filename, data, pages, lessons)
     return merge_readers(vector, ai), cached, dropped
 
 
 def _read_with_ai(claude: Claude, cache_dir: Path, filename: str, data: bytes,
-                  pages: list[int] | None = None) -> tuple[list[Fact], bool, int]:
-    digest = hashlib.sha256(data + repr((PROMPT_VERSION, pages)).encode()).hexdigest()
+                  pages: list[int] | None = None, lessons: str = "") -> tuple[list[Fact], bool, int]:
+    # New lessons mean a new prompt, so they are part of the cache key.
+    digest = hashlib.sha256(data + repr((PROMPT_VERSION, pages, lessons)).encode()).hexdigest()
     cache_file = cache_dir / f"{digest}.json"
     cached = cache_file.exists()
     if cached:
         raw_facts = json.loads(cache_file.read_text(encoding="utf-8"))
     else:
-        result = claude.structured(SYSTEM, build_content(filename, data, pages), RESPONSE_SCHEMA, effort="medium")
+        content = build_content(filename, data, pages)
+        if lessons:
+            content = [{"type": "text", "text": lessons}] + content
+        result = claude.structured(SYSTEM, content, RESPONSE_SCHEMA, effort="medium")
         raw_facts = result["facts"]
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(json.dumps(raw_facts), encoding="utf-8")

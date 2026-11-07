@@ -4,11 +4,19 @@ The checks still decide every result. This only answers "is this fail real, or d
 drawing?" and can turn a fail into can't tell. It never creates a fail and never touches a pass,
 a conflict, or a can't tell.
 
+What a label means: "Did the reader read this value correctly?" Not "is the ship compliant?".
+- accept   ("Read correctly")  -> 1
+- reject   ("Misread")         -> 0, optionally with the right value, which becomes an engineer fact
+- unsure   ("Not sure")        -> no label; logged, never trained on
+  ("correct" is kept as an alias for reject with a value.)
+
 Red lines:
-- Trained only on engineers' Accept / Reject / Correct decisions, never on its own predictions.
+- Trained only on engineers' decisions, never on its own predictions. Every label keeps who gave it
+  and when, and can be undone.
 - Simulated labels are flagged `synthetic`, left out of training unless explicitly allowed, and
   named in every note the model writes.
-- Until there are MIN_LABELS labels, a fixed rule applies: low reading confidence gives can't tell.
+- Until there are MIN_LABELS labels with at least MIN_PER_CLASS of each answer, a fixed rule
+  applies: low reading confidence gives can't tell.
 """
 from __future__ import annotations
 
@@ -32,6 +40,8 @@ from .store import FactStore
 TAU = 0.7
 COLD_START_MIN_CONFIDENCE = 0.7
 MIN_LABELS = 30
+# With ~3% misreads, 30 reviews hold about one reject: nothing to learn from. Wait for both answers.
+MIN_PER_CLASS = 8
 RETRAIN_EVERY = 5
 CONFIDENCE_SCORE = {"high": 0.9, "medium": 0.7, "low": 0.4}
 SOURCE_KINDS = [kind.value for kind in SourceKind]
@@ -41,6 +51,7 @@ NUMERIC_FEATURES = ["extraction_confidence", "margin", "scale_known", "n_sources
                     "reader_vector", "pairing_gap_in", "ambiguous_pairing", "ocr_text", "from_table"]
 FEATURE_NAMES = NUMERIC_FEATURES + [f"source_{kind}" for kind in SOURCE_KINDS]
 DECISION_LABEL = {"accept": 1, "reject": 0, "correct": 0}
+DECISIONS = set(DECISION_LABEL) | {"unsure"}
 LENGTH_AGREE_MM = 10.0
 _UNIT_TEXT = re.compile(r"(\d\s*(mm|cm|m|in|inch|ft|feet)\b|[\"'″′])", re.IGNORECASE)
 _TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4, "ft": 304.8}
@@ -94,7 +105,8 @@ def features(finding: Finding, store: FactStore | None = None) -> dict[str, floa
 
 
 def to_matrix(rows: list[dict]) -> np.ndarray:
-    return np.array([[float(row[name]) for name in FEATURE_NAMES] for row in rows], dtype=float)
+    # A feature added later is 0 in older labels.
+    return np.array([[float(row.get(name, 0.0)) for name in FEATURE_NAMES] for row in rows], dtype=float)
 
 
 def review_key(finding: Finding) -> str:
@@ -125,24 +137,46 @@ class LabelPool:
             return []
         return [json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    def add(self, row: dict) -> None:
-        """A second review of the same finding replaces the first, so one finding counts once."""
-        rows = [r for r in self.rows() if r["key"] != row["key"]] + [row]
+    def _write(self, rows: list[dict]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
 
+    def add(self, row: dict) -> None:
+        """A second review of the same finding replaces the first, so one finding counts once."""
+        self._write([r for r in self.rows() if r["key"] != row["key"]] + [row])
+
+    def remove(self, key: str) -> dict | None:
+        rows = self.rows()
+        gone = next((r for r in rows if r["key"] == key), None)
+        if gone is not None:
+            self._write([r for r in rows if r["key"] != key])
+        return gone
+
 
 def make_label(finding: Finding, store: FactStore, decision: str, *, synthetic: bool = False,
-               corrected_value: float | None = None, corrected_unit: str = "", note: str = "") -> dict:
-    if decision not in DECISION_LABEL:
-        raise ValueError(f"Unknown decision: {decision}. Use accept, reject, or correct.")
+               corrected_value: float | None = None, corrected_unit: str = "", note: str = "",
+               reviewer: str = "") -> dict:
+    """One engineer answer. "unsure" gives a row with label None: logged, never trained on."""
+    if decision not in DECISIONS:
+        raise ValueError(f"Unknown decision: {decision}. Use accept, reject, or unsure.")
     if decision == "correct" and corrected_value is None:
         raise ValueError("A correction needs the corrected value.")
+    if decision == "correct":
+        decision = "reject"
+    if corrected_value is not None and decision != "reject":
+        raise ValueError("Only a misread can carry a corrected value.")
+    if corrected_value is not None and not corrected_unit:
+        raise ValueError("Give the unit of the corrected value.")
+    basis = finding.evidence.facts[0] if finding.evidence and finding.evidence.facts else None
     return {
-        "key": review_key(finding), "label": DECISION_LABEL[decision], "decision": decision,
+        "key": review_key(finding), "label": DECISION_LABEL.get(decision), "decision": decision,
         "features": features(finding, store), "rule_id": finding.rule_id, "subject": finding.subject,
         "measured": finding.measured, "corrected_value": corrected_value, "corrected_unit": corrected_unit,
-        "note": note, "synthetic": synthetic, "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "read": None if basis is None else {"subject": basis.subject, "property": basis.property, "value": basis.value,
+                                            "unit": basis.unit, "quote": basis.source.quote, "file": basis.source.file,
+                                            "locator": basis.source.locator, "reader": (basis.meta or {}).get("reader", "")},
+        "note": note, "reviewer": reviewer, "synthetic": synthetic,
+        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 
@@ -175,9 +209,11 @@ def cross_validated(X: np.ndarray, y: np.ndarray, seed: int = 0) -> np.ndarray |
 
 class ConfidenceGate:
     def __init__(self, directory: Path, tau: float = TAU, min_labels: int = MIN_LABELS,
-                 retrain_every: int = RETRAIN_EVERY, allow_synthetic: bool = False):
+                 retrain_every: int = RETRAIN_EVERY, allow_synthetic: bool = False,
+                 min_per_class: int = MIN_PER_CLASS):
         self.directory = directory
         self.tau, self.min_labels, self.retrain_every = tau, min_labels, retrain_every
+        self.min_per_class = min_per_class
         self.allow_synthetic = allow_synthetic
         self.pool = LabelPool(directory / "labels.jsonl")
         self.meta_file = directory / "meta.json"
@@ -192,20 +228,55 @@ class ConfidenceGate:
         # A model fitted on simulated labels must not run once they are no longer allowed.
         if meta.get("n_synthetic") and not self.allow_synthetic:
             return
+        # A model fitted on other features can't score today's rows.
+        if meta.get("features") != FEATURE_NAMES:
+            return
         self.meta = meta
         self.model = pickle.loads((self.directory / meta["model_file"]).read_bytes())
 
     def training_rows(self) -> list[dict]:
-        return [r for r in self.pool.rows() if self.allow_synthetic or not r.get("synthetic")]
+        return [r for r in self.pool.rows() if r.get("label") is not None
+                and (self.allow_synthetic or not r.get("synthetic"))]
+
+    def readiness(self, rows: list[dict] | None = None) -> str:
+        """Why the model can't run yet, in plain words. Empty when it can."""
+        rows = self.training_rows() if rows is None else rows
+        accepts = sum(r["label"] == 1 for r in rows)
+        rejects = len(rows) - accepts
+        needs = []
+        if len(rows) < self.min_labels:
+            needs.append(f"{self.min_labels - len(rows)} more review(s)")
+        if rejects < self.min_per_class:
+            needs.append(f"{self.min_per_class - rejects} more \"misread\" answer(s)")
+        if accepts < self.min_per_class:
+            needs.append(f"{self.min_per_class - accepts} more \"read correctly\" answer(s)")
+        if not needs:
+            return ""
+        return "Fixed rule in use (low reading confidence gives can't tell). The model starts after " + ", ".join(needs) + "."
 
     def record(self, row: dict) -> bool:
         """Store one engineer decision, then retrain if it's time. Returns whether it retrained."""
         self.pool.add(row)
         return self.maybe_retrain()
 
+    def undo(self, key: str) -> dict | None:
+        """Take one label back and refit on what is left, so a wrong click leaves no trace in the model."""
+        gone = self.pool.remove(key)
+        if gone is not None and gone.get("label") is not None:
+            self.refit()
+        return gone
+
+    def refit(self) -> bool:
+        rows = self.training_rows()
+        if self.readiness(rows):
+            self.model, self.meta = None, None
+            self.meta_file.unlink(missing_ok=True)
+            return False
+        return self.train(rows)
+
     def maybe_retrain(self) -> bool:
         rows = self.training_rows()
-        if len(rows) < self.min_labels:
+        if self.readiness(rows):
             return False
         if self.meta and len(rows) - self.meta["n_labels"] < self.retrain_every:
             return False
@@ -218,7 +289,8 @@ class ConfidenceGate:
         X = to_matrix([r["features"] for r in rows])
         model = new_model().fit(X, y)
         p_oof = cross_validated(X, y)
-        version = (self.meta or {}).get("version", 0) + 1
+        # Count saved versions, so a refit after an undo never reuses a number.
+        version = len(list((self.directory / "models").glob("v*.pkl"))) + 1
         model_file = f"models/v{version}.pkl"
         (self.directory / "models").mkdir(parents=True, exist_ok=True)
         (self.directory / model_file).write_bytes(pickle.dumps(model))
@@ -226,6 +298,7 @@ class ConfidenceGate:
         self.meta = {
             "version": version, "model_file": model_file, "n_labels": len(rows),
             "n_synthetic": sum(bool(r.get("synthetic")) for r in rows), "n_real": sum(r["label"] == 1 for r in rows),
+            "n_misread": sum(r["label"] == 0 for r in rows),
             "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tau": self.tau,
             "features": FEATURE_NAMES, "weights": dict(zip(FEATURE_NAMES, map(float, coefs))),
             "cv": None if p_oof is None else [scores_at(y, p_oof, t) for t in (0.5, 0.6, 0.7, 0.8, 0.9)],
@@ -253,24 +326,61 @@ class ConfidenceGate:
             if finding.status != Status.FAIL or finding.evidence is None or not finding.evidence.facts:
                 gated.append(finding)
                 continue
+            if finding.evidence.facts[0].source.kind == SourceKind.ENGINEER:
+                # The engineer typed this value themselves: nothing was read, so nothing to doubt or review.
+                gated.append(finding)
+                continue
             row = features(finding, store)
             p = self.p_real(row)
             status, reason = shown_status(finding.status, row["extraction_confidence"], p, self.tau)
-            update = {"original_status": Status.FAIL, "p_real": p, "reviewable": True}
+            source = finding.evidence.facts[0].source
+            update = {"original_status": Status.FAIL, "p_real": p, "reviewable": True,
+                      "read_quote": source.quote, "read_file": source.file, "read_locator": source.locator}
             if status != finding.status:
                 update.update(status=status, gate_note=reason + (self._source_note() if p is not None else ""),
-                              question=f"Check {finding.measured} against the drawing. Is this fail real?")
+                              question=f"Check {finding.measured} against the drawing. Was it read correctly?")
             gated.append(finding.model_copy(update=update))
         return gated
+
+    def review_order(self, findings: list[Finding], store: FactStore) -> list[tuple[Finding, float, str]]:
+        """Reviewable fails, most useful first (active learning).
+
+        With a model: the ones it is least sure about (P(real) nearest 0.5). Without one: the shakiest
+        readings first (lowest confidence, then closest to the limit), because that is where misreads
+        hide, and misread answers are the scarce ones the model needs.
+        """
+        reviewed = {r["key"] for r in self.pool.rows()}
+        queue = []
+        for finding in findings:
+            if not finding.reviewable or review_key(finding) in reviewed:
+                continue
+            row = features(finding, store)
+            if finding.p_real is not None:
+                queue.append((finding, abs(finding.p_real - 0.5), f"model unsure: P(real) = {finding.p_real:.2f}"))
+            else:
+                score = row["extraction_confidence"] + min(row["margin"], 1.0) / 10
+                queue.append((finding, score, f"reading confidence {row['extraction_confidence']:.1f}, "
+                                              f"{row['margin'] * 100:.0f}% from the limit"))
+        return sorted(queue, key=lambda item: item[1])
 
     def status(self) -> dict:
         rows = self.pool.rows()
         used = self.training_rows()
+        reason = self.readiness(used) if self.model is None else ""
+        simulated = bool(self.meta and self.meta.get("n_synthetic"))
         return {
-            "mode": "model" if self.model is not None else "cold_start",
-            "tau": self.tau, "min_labels": self.min_labels, "retrain_every": self.retrain_every,
+            # simulated: the running model learned from simulated labels. Say so on screen.
+            "mode": "simulated" if simulated else ("model" if self.model is not None else "cold_start"),
+            "reason": reason or ("" if self.model is not None else "No model yet."),
+            "tau": self.tau, "min_labels": self.min_labels, "min_per_class": self.min_per_class,
+            "retrain_every": self.retrain_every,
             "labels_total": len(rows), "labels_synthetic": sum(bool(r.get("synthetic")) for r in rows),
             "labels_used": len(used), "allow_synthetic": self.allow_synthetic,
+            "labels_read_correctly": sum(r["label"] == 1 for r in used), "labels_misread": sum(r["label"] == 0 for r in used),
+            "labels_unsure": sum(r.get("label") is None for r in rows),
             "labels_until_model": max(0, self.min_labels - len(used)) if self.model is None else 0,
+            "recent": [{k: r.get(k) for k in ("key", "decision", "subject", "measured", "corrected_value",
+                                              "corrected_unit", "reviewer", "created", "synthetic")}
+                       for r in rows[-8:][::-1]],
             "model": self.meta,
         }

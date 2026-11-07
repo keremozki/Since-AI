@@ -186,3 +186,17 @@ select, input:not([type="file"]):not([type="range"]) {
 .review { margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .review p { width: 100%; margin: 0; font-size: 0.85rem; }
 .review input { width: 7rem; }
+
+/* Review loop */
+.simulated { background: #fff4ce; color: #5c4400; font-weight: 600; margin: 0; padding: 6px 16px; }
+.review .read-from { color: var(--muted); }
+.review .evidence { border: 1px solid var(--line); max-height: 260px; max-width: 100%; object-fit: contain; background: #fff; }
+.review-actions, .misread { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; width: 100%; }
+.misread label { font-size: 0.8rem; }
+.learning h3 { font-size: 12px; margin: 10px 0 4px; }
+.learning p { font-size: 12px; margin: 4px 0; }
+.learning .queue, .learning .recent { margin: 0; padding: 0 0 0 16px; font-size: 12px; }
+.learning .recent { list-style: none; padding: 0; }
+.learning .queue button { background: none; border: 0; cursor: pointer; display: block; padding: 3px 0; text-align: left; width: 100%; }
+.learning .queue small { color: var(--muted); display: block; }
+.learning .recent li { align-items: center; display: flex; gap: 6px; justify-content: space-between; padding: 2px 0; }

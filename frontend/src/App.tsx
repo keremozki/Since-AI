@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Accuracy, api, Decision, Finding, Inputs, MeasureTarget, Profile, RunResult, Spend, Status, UpdateResponse } from "./api";
+import { Accuracy, api, ConfidenceStatus, Decision, Finding, Inputs, MeasureTarget, Profile, QueueItem, RunResult, Spend, Status, UpdateResponse } from "./api";
 import ShipViewer, { Measurement, STATUS_COLOR } from "./ShipViewer";
 
 const STATUS_ORDER: Status[] = ["fail", "conflict", "cant_tell", "pass"];
@@ -24,6 +24,17 @@ export default function App() {
   const [measuring, setMeasuring] = useState(false);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const [inputs, setInputs] = useState<Inputs | null>(null);
+  const [learning, setLearning] = useState<ConfidenceStatus | null>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [reviewer, setReviewer] = useState(() => { try { return localStorage.getItem("reviewer") ?? ""; } catch { return ""; } });
+
+  const refreshLearning = useCallback(async (id: string) => {
+    try {
+      const [status, next] = await Promise.all([api.confidence(), api.reviewQueue(id)]);
+      setLearning(status);
+      setQueue(next);
+    } catch { /* the panel just stays as it was */ }
+  }, []);
 
   const refresh = useCallback(async (id: string) => {
     setError("");
@@ -32,10 +43,11 @@ export default function App() {
       setResult(next);
       setSpend(nextSpend);
       setInputs(nextInputs);
+      refreshLearning(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The checks couldn't run.");
     }
-  }, []);
+  }, [refreshLearning]);
 
   useEffect(() => { api.profiles().then(setProfiles).catch(() => setError("Can't reach the backend. Is it running?")); }, []);
   useEffect(() => { setSelected(null); refresh(profileId); }, [profileId, refresh]);
@@ -56,18 +68,36 @@ export default function App() {
     if (update.dropped) notes.push({ role: "system", text: `${update.dropped} value(s) were rejected because they didn't fit a known fact.` });
     if (update.changes.length) notes.push({ role: "system", text: `Tests rerun. Changed:\n${update.changes.join("\n")}` });
     setLines((current) => [...current, ...notes]);
-  }, []);
+    refreshLearning(profileId);
+  }, [profileId, refreshLearning]);
 
   const review = useCallback(async (finding: Finding, decision: Decision, value?: number, unit?: string) => {
     setError("");
     try {
       const update = await api.feedback(profileId, { rule_id: finding.rule_id, subject: finding.subject, decision,
-                                                     corrected_value: value, corrected_unit: unit });
-      applyUpdate(update, `Review saved for ${finding.label}: ${decision}.${update.retrained ? " The confidence model was retrained." : ""}`);
+                                                     corrected_value: value, corrected_unit: unit, reviewer });
+      const said = { accept: "read correctly", reject: "misread", unsure: "not sure (not used for training)" }[decision];
+      applyUpdate(update, `Answer saved for ${finding.label}: ${said}.${update.retrained ? " The confidence model was retrained." : ""}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The review couldn't be saved.");
+      setError(e instanceof Error ? e.message : "The answer couldn't be saved.");
+    }
+  }, [profileId, applyUpdate, reviewer]);
+
+  const undo = useCallback(async (key: string) => {
+    setError("");
+    try {
+      applyUpdate(await api.undoFeedback(profileId, key), "Answer taken back. The model refits without it.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The answer couldn't be taken back.");
     }
   }, [profileId, applyUpdate]);
+
+  const nameReviewer = (name: string) => {
+    setReviewer(name);
+    try { localStorage.setItem("reviewer", name); } catch { /* not saved, still used */ }
+  };
+  const pick = (item: QueueItem) =>
+    setSelected(result?.findings.find((f) => f.rule_id === item.rule_id && f.subject === item.subject) ?? null);
 
   const reset = async () => {
     await api.reset();
@@ -94,6 +124,11 @@ export default function App() {
           {spend && <span className="spend" title={`${spend.calls} AI calls`}>AI spend ${spend.spent_usd.toFixed(2)} of ${spend.cap_usd.toFixed(2)}</span>}
         </div>
       </header>
+      {learning?.mode === "simulated" && (
+        <p className="simulated" role="status">
+          SIMULATED LABELS: the confidence model running now learned from {learning.model?.n_synthetic} simulated answers, not from engineers.
+        </p>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
       <main className="layout">
         <Results result={result} selected={selected} onSelect={setSelected} filter={filter} onFilter={setFilter} />
@@ -103,6 +138,7 @@ export default function App() {
           {selected && <FindingDetail finding={selected} onReview={review} />}
         </div>
         <aside className="side">
+          <LearningPanel status={learning} queue={queue} reviewer={reviewer} onReviewer={nameReviewer} onPick={pick} onUndo={undo} />
           <InputsPanel profileId={profileId} inputs={inputs} onDone={(update, intro) => { setMeasuring(false); applyUpdate(update, intro); }} onError={setError} />
           <MeasurePanel profileId={profileId} measuring={measuring} onToggle={setMeasuring} measurement={measurement}
             available={inputs?.model.has_view ?? false} onSaved={(u) => applyUpdate(u, "Measurement saved.")} onError={setError} />
@@ -191,9 +227,16 @@ function Scoreboard() {
 
 type Review = (finding: Finding, decision: Decision, value?: number, unit?: string) => void;
 
+const TO_MM: Record<string, number> = { mm: 1, in: 25.4, m: 1000, ft: 304.8 };
+
 function FindingDetail({ finding, onReview }: { finding: Finding; onReview: Review }) {
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState("mm");
+  const [misread, setMisread] = useState(false);
+  const [cropOk, setCropOk] = useState(true);
+  useEffect(() => { setMisread(false); setValue(""); setCropOk(true); }, [finding.rule_id, finding.subject]);
+  const number = Number(value);
+  const inMm = value && Number.isFinite(number) ? number * TO_MM[unit] : null;
   const rows: [string, string][] = [
     ["Where", finding.where], ["Found", finding.measured], ["Required", finding.required], ["Gap", finding.gap],
     ["Rule", finding.rule_source], ["Why it applies", finding.why], ["Confidence", finding.confidence],
@@ -211,17 +254,88 @@ function FindingDetail({ finding, onReview }: { finding: Finding; onReview: Revi
       </dl>
       {finding.reviewable && (
         <div className="review" aria-label="Engineer review">
-          <p>Is this fail real? Your answer trains the confidence model.</p>
-          <button type="button" onClick={() => onReview(finding, "accept")}>Accept: real fail</button>
-          <button type="button" onClick={() => onReview(finding, "reject")}>Reject: misread</button>
-          <span>
-            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Correct value" aria-label="Correct value" />
-            <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
-              <option>mm</option><option>in</option><option>m</option><option>ft</option>
-            </select>
-            <button type="button" disabled={!value} onClick={() => { onReview(finding, "correct", Number(value), unit); setValue(""); }}>Correct</button>
-          </span>
+          <p><strong>Was this value read correctly from the drawing?</strong> You judge the reading, not the ship. Your answer trains the confidence model.</p>
+          {(finding.read_quote || finding.read_file) && (
+            <p className="read-from">Read from {finding.read_file || "the input"}{finding.read_locator ? `, ${finding.read_locator}` : ""}
+              {finding.read_quote && <>: <q>{finding.read_quote}</q></>}</p>
+          )}
+          {finding.read_file.toLowerCase().endsWith(".pdf") && finding.read_locator && cropOk && (
+            <img className="evidence" alt={`The drawing where ${finding.measured} was read`} onError={() => setCropOk(false)}
+              src={api.evidenceUrl(finding.read_file, finding.read_locator)} />
+          )}
+          <div className="review-actions">
+            <button type="button" onClick={() => onReview(finding, "accept")}>Read correctly</button>
+            <button type="button" aria-expanded={misread} onClick={() => setMisread(!misread)}>Misread</button>
+            <button type="button" onClick={() => onReview(finding, "unsure")}>Not sure</button>
+          </div>
+          {misread && (
+            <div className="misread">
+              <label>Right value (optional)
+                <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Leave empty if unknown" />
+              </label>
+              <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
+                <option>mm</option><option>in</option><option>m</option><option>ft</option>
+              </select>
+              {inMm !== null && unit !== "mm" && <small>= {inMm.toFixed(1)} mm</small>}
+              <button type="button" onClick={() => onReview(finding, "reject", inMm !== null ? number : undefined, inMm !== null ? unit : undefined)}>
+                {inMm !== null ? "Save misread and the right value" : "Save misread"}
+              </button>
+            </div>
+          )}
+          <p className="muted">Not sure? Choose "Not sure": it is logged and never used for training.</p>
         </div>
+      )}
+    </section>
+  );
+}
+
+function LearningPanel({ status, queue, reviewer, onReviewer, onPick, onUndo }: {
+  status: ConfidenceStatus | null;
+  queue: QueueItem[];
+  reviewer: string;
+  onReviewer: (name: string) => void;
+  onPick: (item: QueueItem) => void;
+  onUndo: (key: string) => void;
+}) {
+  if (!status) return null;
+  const said = { accept: "read correctly", reject: "misread", unsure: "not sure" };
+  const mode = { cold_start: "Fixed rule", model: `Model v${status.model?.version ?? ""}`, simulated: `Model v${status.model?.version ?? ""} (SIMULATED labels)` }[status.mode];
+  return (
+    <section className="panel learning">
+      <h2>Learning from reviews</h2>
+      <p><strong>{mode}</strong>{status.reason && <> · {status.reason}</>}</p>
+      <p className="muted">
+        {status.labels_used} of {status.min_labels} answers · read correctly {status.labels_read_correctly} · misread {status.labels_misread} of {status.min_per_class} needed
+        {status.labels_unsure ? ` · not sure ${status.labels_unsure}` : ""}
+      </p>
+      <p className="muted">AI reader lessons from misreads: {status.lessons.length}</p>
+      <label>Your name <input value={reviewer} onChange={(e) => onReviewer(e.target.value)} placeholder="Saved with each answer" /></label>
+      {queue.length > 0 && (
+        <>
+          <h3>Review next</h3>
+          <ol className="queue">
+            {queue.map((item) => (
+              <li key={`${item.rule_id}|${item.subject}`}>
+                <button type="button" onClick={() => onPick(item)}><strong>{item.label}</strong> <span>{item.measured}</span><small>{item.why_now}</small></button>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      {status.recent.length > 0 && (
+        <>
+          <h3>Recent answers</h3>
+          <ul className="recent">
+            {status.recent.map((answer) => (
+              <li key={answer.key}>
+                <span>{answer.subject}: {said[answer.decision] ?? answer.decision}
+                  {answer.corrected_value !== null ? `, right value ${answer.corrected_value} ${answer.corrected_unit}` : ""}
+                  {answer.reviewer ? ` (${answer.reviewer})` : ""}{answer.synthetic ? " SIMULATED" : ""}</span>
+                <button type="button" onClick={() => onUndo(answer.key)}>Undo</button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );

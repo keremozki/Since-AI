@@ -20,9 +20,12 @@ class SourceKind(str, Enum):
     IMAGE = "image"
     CHAT = "chat"
     DEMO_SEED = "demo_seed"
+    # A value an engineer typed while marking a reading as wrong. It replaces that reading.
+    ENGINEER = "engineer_review"
 
 
 SOURCE_LABELS = {
+    SourceKind.ENGINEER: "Engineer correction",
     SourceKind.MODEL_3D: "3D model",
     SourceKind.MEASUREMENT: "3D measurement",
     SourceKind.DOCUMENT: "Document",
@@ -141,6 +144,10 @@ class Finding(BaseModel):
     p_real: float | None = None
     gate_note: str = ""
     reviewable: bool = False
+    # Where the reviewed value was read, so the engineer can check it against the drawing.
+    read_quote: str = ""
+    read_file: str = ""
+    read_locator: str = ""
 
 
 class ScopeDecision(BaseModel):
