@@ -1,0 +1,13 @@
+id: door.accessible_route
+subject: door-number:[\w.-]+
+property: accessible_route
+kind: text
+meaning: Whether the door is on an accessible route (yes or no).
+labels:
+- ACCESSIBLE ROUTE
+- ACCESSIBLE
+- ON ACCESSIBLE ROUTE
+not: []
+usually_on:
+- door schedule
+- accessibility plan

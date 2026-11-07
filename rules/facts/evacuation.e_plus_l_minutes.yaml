@@ -1,0 +1,17 @@
+id: evacuation.e_plus_l_minutes
+subject: evacuation
+property: e_plus_l_minutes
+kind: number
+meaning: Embarkation and launching time (E+L) of the governing case, in minutes (MSC.1/Circ.1533 5.1, second standard).
+# No labels on purpose: an analysis lists E+L for several cases in one table, and reading the first row could take
+# a case that doesn't govern. The engineer states it (POST /api/facts/state) from the analysis.
+labels: []
+not:
+- R+T
+usually_on:
+- evacuation analysis
+range:
+- 0
+- 120
+used_by:
+- MSC.1/Circ.1533 annex 1, 5.1

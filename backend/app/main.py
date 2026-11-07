@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 
@@ -14,15 +15,24 @@ from pydantic import BaseModel
 
 from . import chat as chat_module
 from . import confidence
-from . import ingest, lessons, nwd
+from . import dictionary, evidence, ingest, lessons, nwd, proof, revisions, sightline
+from .reading import code_reader
+from .reading import pipeline as reading_pipeline
 from .checks import describe_fact
 from .engine import report_text, run
+from .ai_gateway import AIResponsePending, make_ai
 from .llm import DEFAULT_CAP_USD, AIUnavailable, BudgetExceeded, Claude, Ledger, ModelRefused, env_float, load_env
 from .models import Fact, Point, RunResult, Source, SourceKind, Status
 from .parts import facts_from_parts, load_parts
+from .basis.design_basis import compute_basis, missing_inputs
+from .basis.scope import CARD_PROFILE_ID, basis_scope, card_profile
+from .basis.shipcard import FIELDS as CARD_FIELDS
+from .basis.shipcard import ShipCard, confirm as confirm_card_field, propose_card
+from .basis.whatif import amendments_for, compare
 from .profiles import PROFILES, demo_faults
 from .rules import load_rules
 from .store import FactStore
+from .tiers import tier_of
 from .units import is_length_unit
 from .vocabulary import VOCABULARY
 
@@ -43,6 +53,16 @@ class AppState:
         self.rules_file, self.rule_texts_dir = rules_file, rule_texts_dir
         self.added_file = data_dir / "added_facts.json"
         self.inputs_file = data_dir / "inputs.json"
+        self.uploads_dir = data_dir / "uploads"  # kept so evidence can be shown and proof bundles carry the files
+        self.card_file = data_dir / "shipcard.json"  # values an engineer confirmed on the ship card
+        self.overlays_file = data_dir / "overlays.json"  # rules drawn on drawings, keyed "rule_id|subject"
+        self.overlays: dict[str, dict] = (json.loads(self.overlays_file.read_text(encoding="utf-8"))
+                                          if self.overlays_file.exists() else {})
+        self.suggestions_file = data_dir / "label_suggestions.json"
+        self.label_suggestions: list[dict] = (json.loads(self.suggestions_file.read_text(encoding="utf-8"))
+                                              if self.suggestions_file.exists() else [])
+        self.card_confirmed: list[dict] = (json.loads(self.card_file.read_text(encoding="utf-8"))
+                                           if self.card_file.exists() else [])
         self.active_model: str | None = None
         self.geometry_for: str | None = None
         self.files: list[str] = []
@@ -55,7 +75,8 @@ class AppState:
         if self.added_file.exists():
             self.added = [Fact(**raw) for raw in json.loads(self.added_file.read_text(encoding="utf-8"))]
         self.ledger = Ledger(data_dir / "usage.json", env_float("BUDGET_USD", DEFAULT_CAP_USD))
-        self.claude = claude or Claude(self.ledger)
+        # Offline by default: nothing leaves the machine until AI_MODE=api or record is set (see .env.example).
+        self.claude = claude or make_ai(data_dir, self.ledger)
         self.history: list[dict] = []
         # Checking quotes means reading every rule text, so do it once at startup.
         self.rules = load_rules(rules_file, rule_texts_dir)
@@ -96,15 +117,37 @@ class AppState:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.added_file.write_text(json.dumps([f.model_dump(mode="json") for f in self.added]), encoding="utf-8")
 
-    def add_facts(self, facts: list[Fact]) -> None:
+    def add_facts(self, facts: list[Fact]) -> list[dict]:
+        """Add facts. A newer revision of a drawing replaces the older one's facts; the notes say what changed."""
+        before = list(self.added)
+        self.added, facts, notes = revisions.supersede(self.added, facts)
         self.added.extend(facts)
         self._save_added()
+        return revisions.revision_impact(before, notes, facts) + [n for n in notes if "question" in n]
 
     def drop_correction(self, label_key: str) -> None:
         """Remove the engineer correction made with one answer (when it is answered again or undone)."""
         kept = [f for f in self.added if not (f.source.kind == SourceKind.ENGINEER and f.meta.get("label_key") == label_key)]
         if len(kept) != len(self.added):
             self.added = kept
+            self._save_added()
+
+    def confirm_readings(self, ids: list[str], by: str) -> list[str]:
+        """Confirm readings the engineer checked. Returns those newly confirmed, so an undo restores exactly them."""
+        done = []
+        for uid in ids:
+            fact = self.find_added(uid)
+            if fact is not None and not fact.confirmed_by:
+                self.confirm_fact(uid, by)
+                done.append(uid)
+        return done
+
+    def unconfirm_answer(self, key: str) -> None:
+        """Take back the confirmations one saved answer made."""
+        row = next((r for r in self.gate.pool.rows() if r["key"] == key), None)
+        ids = set(row.get("confirmed_ids", [])) if row else set()
+        if ids:
+            self.added = [f.model_copy(update={"confirmed_by": ""}) if f.uid() in ids else f for f in self.added]
             self._save_added()
 
     def lessons_text(self) -> str:
@@ -114,6 +157,72 @@ class AppState:
         if name not in self.files:
             self.files.append(name)
             self._save_inputs()
+
+    def add_read_facts(self, name: str, facts: list[Fact], replace: bool = False) -> tuple[list[Fact], list[dict]]:
+        """Add what a file read gave. With replace, the file's earlier facts go, but an engineer's confirmation of
+        the same reading (same value, same place, same quote) carries over."""
+        if replace:
+            kept = {f.uid(): f for f in self.added if f.source.file == name}
+            self.added = [f for f in self.added if f.source.file != name]
+            facts = [f.model_copy(update={"confirmed_by": kept[f.uid()].confirmed_by,
+                                          "superseded_by": kept[f.uid()].superseded_by})
+                     if f.uid() in kept else f for f in facts]
+            corrections = [f for f in kept.values() if f.source.kind == SourceKind.CHAT]
+            facts += corrections
+        known = {f.uid() for f in self.added}
+        fresh = [f for f in facts if f.uid() not in known]
+        return fresh, self.add_facts(fresh)
+
+    def add_label_suggestions(self, items: list[dict]) -> None:
+        known = {(s["fact_id"], s["label"].upper()) for s in self.label_suggestions}
+        self.label_suggestions += [i for i in items if (i["fact_id"], i["label"].upper()) not in known]
+        self.save_label_suggestions()
+
+    def save_label_suggestions(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.suggestions_file.write_text(json.dumps(self.label_suggestions, indent=1), encoding="utf-8")
+
+    def store_upload(self, name: str, data: bytes) -> Path:
+        path = self.uploads_dir / Path(name).name
+        self.uploads_dir.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return path
+
+    def upload_bytes(self, name: str) -> bytes | None:
+        path = self.uploads_dir / Path(name).name
+        return path.read_bytes() if path.exists() else None
+
+    def active_added(self) -> list[Fact]:
+        """Added facts still in force: a newer revision or an engineer's correction replaces a fact."""
+        return [f for f in self.added if not f.superseded_by]
+
+    def find_added(self, uid: str) -> Fact | None:
+        return next((f for f in self.added if f.uid() == uid), None)
+
+    def confirm_fact(self, uid: str, by: str) -> Fact:
+        fact = self.find_added(uid)
+        if fact is None:
+            raise HTTPException(404, f"No recorded fact with id {uid}. Facts from the 3D model are exact already.")
+        confirmed = fact.model_copy(update={"confirmed_by": by})
+        self.added = [confirmed if f is fact else f for f in self.added]
+        self._save_added()
+        return confirmed
+
+    def correct_fact(self, uid: str, value: float | str, unit: str, by: str, note: str = "") -> Fact:
+        """The engineer's value replaces the reading. The reading stays on record, marked as replaced."""
+        fact = self.find_added(uid)
+        if fact is None:
+            raise HTTPException(404, f"No recorded fact with id {uid}.")
+        value, unit = checked_value(fact.subject, fact.property, value, unit)
+        was = f"{fact.value:g}" if isinstance(fact.value, float) else str(fact.value)
+        quote = f"Corrected by {by}: was {was} {fact.unit}".strip() + (f". {note}" if note else "")
+        corrected = Fact(subject=fact.subject, property=fact.property, value=value, unit=unit,
+                         source=Source(kind=SourceKind.CHAT, file=fact.source.file, locator=fact.source.locator, quote=quote),
+                         evidence=fact.evidence, confirmed_by=by, location=fact.location)
+        self.added = [f.model_copy(update={"superseded_by": f"correction by {by}"}) if f is fact else f for f in self.added]
+        self.added.append(corrected)
+        self._save_added()
+        return corrected
 
     def remove_file(self, name: str) -> bool:
         found = name in self.file_names()
@@ -189,15 +298,90 @@ class AppState:
         self.added_file.unlink(missing_ok=True)
         self._save_inputs()
 
-    def result(self, profile_id: str) -> RunResult:
+    def ship_card(self, extra: list[dict] | None = None) -> ShipCard:
+        """Proposed from the facts, then every confirmed value applied on top. `extra` is a what-if on top of that."""
+        card = propose_card(self.model_facts + self.active_added())
+        for item in self.card_confirmed + (extra or []):
+            card = confirm_card_field(card, item["field"], item["value"], item.get("unit", ""), item["by"])
+        return card
+
+    def confirm_card(self, field: str, value, unit: str, by: str) -> ShipCard:
+        card = confirm_card_field(self.ship_card(), field, value, unit, by)  # raises ValueError on a bad value
+        self.card_confirmed = [c for c in self.card_confirmed if c["field"] != field] + [
+            {"field": field, "value": value, "unit": unit, "by": by}]
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.card_file.write_text(json.dumps(self.card_confirmed, default=str), encoding="utf-8")
+        return card
+
+    def profile_and_scope(self, profile_id: str, card: ShipCard | None = None):
+        if profile_id == CARD_PROFILE_ID:
+            card = card or self.ship_card()
+            return card_profile(card), basis_scope(card)
         profile = PROFILES.get(profile_id)
         if profile is None:
             raise HTTPException(404, f"Unknown ship profile: {profile_id}")
-        return run(self.store(profile_id), self.rules, profile, gate=self.gate)
+        return profile, None
+
+    def result(self, profile_id: str, card: ShipCard | None = None) -> RunResult:
+        profile, scope_fn = self.profile_and_scope(profile_id, card)
+        result = run(FactStore(self.run_facts(profile)), self.rules, profile, scope_fn=scope_fn, gate=self.gate)
+        answers = {row["key"]: row for row in self.gate.pool.rows()}
+        for finding in result.findings:
+            overlay = self.overlays.get(f"{finding.rule_id}|{finding.subject}")
+            if overlay is not None:
+                finding.overlay = overlay
+            answer = answers.get(confidence.review_key(finding))
+            if answer is not None:
+                finding.answer, finding.answer_key = answer["decision"], answer["key"]
+        return result
 
     def store(self, profile_id: str) -> FactStore:
-        profile = PROFILES[profile_id]
-        return FactStore(self.model_facts + self.added + (demo_faults() if profile.use_demo_faults else []))
+        profile, _scope = self.profile_and_scope(profile_id)
+        return FactStore(self.run_facts(profile))
+
+    def derive_sightline(self, request: "sightline.SightlineRequest") -> list[Fact]:
+        """Bridge facts measured on a calibrated profile from the engineer's three points. Replaces earlier ones."""
+        from .reading.calibrate import calibrate_page
+        from .reading.pagemap import build_document_map
+
+        data = self.upload_bytes(request.file)
+        if data is None:
+            raise HTTPException(404, f"{request.file} isn't stored. Upload it first.")
+        dm = build_document_map(data, request.file, cache_dir=self.data_dir / "page-maps")
+        facts = FactStore(self.model_facts + self.active_added())
+        spacing = facts.get("ship", "frame_spacing")
+        spacing = next((f for f in spacing if tier_of(f).value in ("A", "B")), None)
+        from .units import to_mm as length_mm
+        cal = calibrate_page(dm, request.page, data, length_mm(float(spacing.value), spacing.unit) if spacing else None)
+        if request.draught_m is not None:
+            draught, where = request.draught_m, f"stated by {request.by.strip()}"
+        else:
+            stated = next((f for f in facts.get("ship", "design_draft") if tier_of(f).value in ("A", "B")), None)
+            if stated is None:
+                raise HTTPException(400, "No confirmed design draught. State the draught for this check (draught_m).")
+            draught, where = length_mm(float(stated.value), stated.unit) / 1000.0, stated.source.describe()
+        try:
+            derived, overlay = sightline.derive(request, cal, draught, where, dm.title_block.drawing_no, dm.title_block.revision)
+        except sightline.SightlineError as error:
+            raise HTTPException(400, str(error)) from error
+        self.added = [f for f in self.added if not (f.subject == "bridge" and "picked by" in f.source.locator)]
+        self.add_facts(derived)
+        self.overlays["SOLAS-V-22|bridge"] = overlay
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.overlays_file.write_text(json.dumps(self.overlays), encoding="utf-8")
+        return derived
+
+    def run_facts(self, profile) -> list[Fact]:
+        return self.model_facts + self.active_added() + (demo_faults() if profile.use_demo_faults else [])
+
+    def proof_bundle(self, profile_id: str) -> bytes:
+        profile, _scope = self.profile_and_scope(profile_id)
+        result = self.result(profile_id)
+        # Every fact the run saw, not only those a finding names: cross-checks and scope depend on the rest too.
+        facts = self.run_facts(profile)
+        names = {f.source.file for f in facts if f.source.file} | {f.evidence.file for f in facts if f.evidence and f.evidence.file}
+        files = {name: data for name in sorted(names) if (data := self.upload_bytes(name)) is not None}
+        return proof.build_bundle(result, facts, self.rules, files, sorted(getattr(self.claude, "used", set())), ROOT)
 
 
 class ChatRequest(BaseModel):
@@ -214,6 +398,45 @@ class FeedbackRequest(BaseModel):
     corrected_unit: str = ""
     note: str = ""
     reviewer: str = ""
+class CardConfirmRequest(BaseModel):
+    field: str
+    value: float | str
+    unit: str = ""
+    by: str
+
+
+class WhatIfRequest(BaseModel):
+    """Card values to try, not saved: {field: value} or {field: {"value": v, "unit": u}}. A sister hull is a what-if
+    on its dates (keel, contract, delivery)."""
+
+    changes: dict[str, float | str | dict]
+
+
+class StateRequest(BaseModel):
+    """An engineer answers a question with a value, without the AI. It must be a fact the dictionary defines."""
+
+    subject: str
+    property: str
+    value: float | str
+    unit: str = ""
+    by: str
+    note: str = ""
+
+
+class LabelApproval(BaseModel):
+    fact_id: str
+    label: str
+    by: str
+
+
+class ConfirmRequest(BaseModel):
+    """An engineer confirms a reading as it is, or corrects it. Either way the value becomes tier A."""
+
+    id: str
+    by: str
+    value: float | str | None = None  # set to correct the value
+    unit: str = ""
+    note: str = ""
 
 
 class MeasureRequest(BaseModel):
@@ -234,7 +457,8 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.state.compliance = state
 
     def spend() -> dict:
-        return {"spent_usd": round(state.ledger.spent, 4), "cap_usd": state.ledger.cap, "calls": state.ledger.calls}
+        return {"spent_usd": round(state.ledger.spent, 4), "cap_usd": state.ledger.cap, "calls": state.ledger.calls,
+                "ai_mode": getattr(state.claude, "mode", "api")}
 
     def rerun(before: RunResult, profile: str, recorded: list[Fact] | None = None, **extra) -> dict:
         after = state.result(profile)
@@ -243,7 +467,49 @@ def create_app(state: AppState | None = None) -> FastAPI:
 
     @app.get("/api/profiles")
     def profiles():
-        return list(PROFILES.values())
+        return [*PROFILES.values(), card_profile(state.ship_card())]
+
+    @app.get("/api/shipcard")
+    def ship_card():
+        card = state.ship_card()
+        basis = compute_basis(card)
+        return {"card": card, "fields": {k: {"label": f.label, "meaning": f.meaning, "kind": f.kind, "choices": list(f.choices)}
+                                         for k, f in CARD_FIELDS.items()},
+                "missing": missing_inputs(basis)}
+
+    @app.post("/api/shipcard/confirm")
+    def confirm_ship_card(request: CardConfirmRequest):
+        before = state.result(CARD_PROFILE_ID)
+        try:
+            card = state.confirm_card(request.field, request.value, request.unit, request.by.strip())
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return {**rerun(before, CARD_PROFILE_ID), "card": card}
+
+    @app.get("/api/basis")
+    def design_basis():
+        """Which rules and editions apply to this hull, why, what each requires as numbers, and what's missing."""
+        card = state.ship_card()
+        items = compute_basis(card)
+        return {"card": card, "items": items, "missing": missing_inputs(items), "amendments": amendments_for(card)}
+
+    @app.post("/api/whatif")
+    def what_if(request: WhatIfRequest):
+        """Try card values without saving them: which rules switch on or off, which requirements move, which
+        results change. Code decides all of it, exactly as for the real card."""
+        extra = []
+        for field, raw in request.changes.items():
+            value, unit = (raw.get("value"), str(raw.get("unit", ""))) if isinstance(raw, dict) else (raw, "")
+            if value is None:
+                raise HTTPException(400, f"Give a value for {field}.")
+            extra.append({"field": field, "value": value, "unit": unit, "by": "what-if"})
+        try:
+            card_a, card_b = state.ship_card(), state.ship_card(extra)
+        except (ValueError, TypeError) as error:
+            raise HTTPException(400, str(error)) from error
+        before, after = state.result(CARD_PROFILE_ID, card_a), state.result(CARD_PROFILE_ID, card_b)
+        return {"rule_changes": compare(card_a, card_b), "result_changes": _changes(before, after),
+                "before": before.counts, "after": after.counts, "card": card_b}
 
     @app.get("/api/run/{profile_id}")
     def run_checks(profile_id: str):
@@ -253,9 +519,75 @@ def create_app(state: AppState | None = None) -> FastAPI:
     def report(profile_id: str):
         return report_text(state.result(profile_id))
 
+    @app.get("/api/ai/status")
+    def ai_status():
+        status = state.claude.status() if hasattr(state.claude, "status") else {"mode": getattr(state.claude, "mode", "api")}
+        return {**status, "spend": spend()}
+
     @app.get("/api/facts")
     def added_facts():
-        return state.added
+        # The tier code decides goes last, so the stored field (often empty) can't hide it.
+        return [{**f.model_dump(mode="json"), "id": f.uid(), "tier": tier_of(f).value} for f in state.added]
+
+    @app.post("/api/facts/confirm")
+    def confirm_fact(profile: str, request: ConfirmRequest):
+        """The engineer's word is the final say: a confirmed or corrected value can back a pass or a fail."""
+        if not request.by.strip():
+            raise HTTPException(400, "Say who confirms the value.")
+        before = state.result(profile)
+        if request.value is None:
+            fact = state.confirm_fact(request.id, request.by.strip())
+        else:
+            fact = state.correct_fact(request.id, request.value, request.unit, request.by.strip(), request.note)
+        return rerun(before, profile, recorded=[fact])
+
+    @app.post("/api/facts/state")
+    def state_fact(profile: str, request: StateRequest):
+        """Answer a "can't tell" question directly. The value is the engineer's, so it is tier A, with their name."""
+        if not request.by.strip():
+            raise HTTPException(400, "Say who states the value.")
+        value, _unit = checked_value(request.subject, request.property, request.value, request.unit)
+        before = state.result(profile)
+        quote = f"Stated by {request.by.strip()}" + (f": {request.note}" if request.note else "")
+        fact = Fact(subject=request.subject, property=request.property, value=value, unit=request.unit.strip().lower(),
+                    source=Source(kind=SourceKind.CHAT, locator="stated in the app", quote=quote),
+                    confirmed_by=request.by.strip())
+        state.add_facts([fact])
+        return rerun(before, profile, recorded=[fact])
+
+    @app.get("/api/proof/{profile_id}")
+    def proof_bundle(profile_id: str):
+        data = state.proof_bundle(profile_id)
+        import io as _io
+        import zipfile as _zipfile
+        digest = proof.sha256(_zipfile.ZipFile(_io.BytesIO(data)).read("bundle.json"))
+        # The digest travels apart from the zip: a verifier compares it, so a bundle rebuilt from scratch shows.
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="proof-{profile_id}.zip"',
+                                 "X-Bundle-SHA256": digest})
+
+    @app.post("/api/sightline")
+    def sightline_from_drawing(profile: str, request: sightline.SightlineRequest):
+        """SOLAS V/22.1.1 measured on a calibrated profile drawing from three points the engineer picks."""
+        before = state.result(profile)
+        derived = state.derive_sightline(request)
+        return rerun(before, profile, recorded=derived)
+
+    @app.get("/api/sightline.png")
+    def sightline_png():
+        overlay = state.overlays.get("SOLAS-V-22|bridge")
+        data = state.upload_bytes(overlay["file"]) if overlay else None
+        if overlay is None or data is None:
+            raise HTTPException(404, "No sight line has been measured yet.")
+        return Response(sightline.overlay_png(data, overlay), media_type="image/png")
+
+    @app.get("/api/evidence/crop")
+    def evidence_crop(file: str, page: int, x0: float, y0: float, x1: float, y1: float, margin: float = 40.0):
+        """The cited part of the page, with the evidence box drawn on it, so a reading can be checked at a glance."""
+        data = state.upload_bytes(file)
+        if data is None:
+            raise HTTPException(404, f"{file} isn't stored, so its evidence can't be shown.")
+        return Response(evidence.crop_png(data, file, page, (x0, y0, x1, y1), margin), media_type="image/png")
 
     @app.get("/api/accuracy")
     def accuracy():
@@ -319,6 +651,8 @@ def create_app(state: AppState | None = None) -> FastAPI:
             raise HTTPException(400, "The message is empty.")
         try:
             reply, facts, dropped = chat_module.respond(state.claude, before, state.history, request.message)
+        except AIResponsePending as pending:
+            raise HTTPException(503, {"message": str(pending), "pending": pending.request_id}) from pending
         except (BudgetExceeded, ModelRefused, AIUnavailable) as error:
             raise HTTPException(503, str(error)) from error
         state.history += [{"role": "engineer", "text": request.message}, {"role": "assistant", "text": reply}]
@@ -327,28 +661,88 @@ def create_app(state: AppState | None = None) -> FastAPI:
 
     @app.post("/api/upload")
     async def upload(profile: str = Form(...), file: UploadFile = File(...), pages: str = Form("")):
+        """Read a file into facts. Drawings, schedules and IFC models go through the reading pipeline: code reads,
+        the AI only points and transcribes, and every value carries its evidence and tier."""
         before = state.result(profile)
         name = Path(file.filename or "upload").name
         data = await file.read(ingest.MAX_UPLOAD_BYTES + 1)  # never hold more than the limit in memory
         try:
             page_list = ingest.parse_pages(pages)
+            ingest.check_file(name, data, page_list)
+        except ingest.FileTooLarge as error:
+            raise HTTPException(413, str(error)) from error
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        again = name in state.file_names()
+        if reading_pipeline.can_read(name):
+            try:
+                read = await run_in_threadpool(reading_pipeline.read_upload, state.claude, name, data,
+                                               state.data_dir / "page-maps", page_list, lessons=state.lessons_text())
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from error
+            if Path(name).suffix.lower() == ".pdf":
+                # The second code reader finds what the first doesn't: door tags, corridors, and ramps.
+                read.facts += await run_in_threadpool(code_reader.extra_facts, name, data, page_list, read.facts)
+            if read.facts or Path(name).suffix.lower() not in ingest.WHOLE_PAGE_AI_TYPES:
+                state.store_upload(name, data)
+                state.add_file(name)
+                fresh, notes = state.add_read_facts(name, read.facts, replace=again)
+                state.add_label_suggestions(read.label_suggestions)
+                return rerun(before, profile, recorded=fresh, reading=read.summary(), revisions=notes)
+            # Code found nothing, like on a clean scan: the AI reads the whole page. Its values stay at one reading (tier C).
+        try:
             facts, cached, dropped = ingest.read_file(state.claude, state.data_dir / "extract-cache",
                                                       name, data, page_list, lessons=state.lessons_text())
         except ingest.FileTooLarge as error:
             raise HTTPException(413, str(error)) from error
+        except AIResponsePending as pending:
+            raise HTTPException(503, {"message": str(pending), "pending": pending.request_id}) from pending
         except (AIUnavailable, BudgetExceeded) as error:
             # Missing key, rejected key, no answer after a retry, or the cap: the rest of the app keeps working.
             raise HTTPException(503, str(error)) from error
         except (ModelRefused, ingest.TooManyPages, ValueError) as error:
             raise HTTPException(400, str(error)) from error
-        # Keep the file, so a reviewer can see the part of the drawing a value came from.
-        (state.data_dir / "uploads").mkdir(parents=True, exist_ok=True)
-        (state.data_dir / "uploads" / Path(name).name).write_bytes(data)
-        known = {(f.subject, f.property, f.value, f.source.file) for f in state.added}
-        fresh = [f for f in facts if (f.subject, f.property, f.value, f.source.file) not in known]
+        state.store_upload(name, data)
         state.add_file(name)
-        state.add_facts(fresh)
-        return rerun(before, profile, recorded=fresh, cached=cached, dropped=dropped)
+        fresh, notes = state.add_read_facts(name, facts)
+        return rerun(before, profile, recorded=fresh, cached=cached, dropped=dropped, revisions=notes)
+
+    @app.post("/api/inputs/reread")
+    def reread(profile: str, name: str):
+        """Read a stored file again, for example after offline AI answers arrived. Confirmations are kept."""
+        data = state.upload_bytes(name)
+        if data is None or not reading_pipeline.can_read(name):
+            raise HTTPException(404, f"{name} isn't stored as a readable file.")
+        before = state.result(profile)
+        read = reading_pipeline.read_upload(state.claude, name, data, state.data_dir / "page-maps", lessons=state.lessons_text())
+        if Path(name).suffix.lower() == ".pdf":
+            read.facts += code_reader.extra_facts(name, data, None, read.facts)
+        fresh, notes = state.add_read_facts(name, read.facts, replace=True)
+        state.add_label_suggestions(read.label_suggestions)
+        return rerun(before, profile, recorded=fresh, reading=read.summary(), revisions=notes)
+
+    @app.get("/api/dictionary/suggestions")
+    def label_suggestions():
+        """Wordings the AI pointed at that the fact dictionary doesn't list. Never used until an engineer approves one."""
+        return state.label_suggestions
+
+    @app.post("/api/dictionary/approve")
+    def approve_label(request: LabelApproval):
+        """Teach the reader a label. From then on code reads it itself, on every document; the AI isn't needed for it."""
+        if not request.by.strip():
+            raise HTTPException(400, "Say who approves the label.")
+        source = next((s for s in state.label_suggestions if s["fact_id"] == request.fact_id
+                       and s["label"].upper() == request.label.upper()), None)
+        note = f"suggested by the AI pointer on {source['file']} page {source['page']}" if source else ""
+        try:
+            definition = dictionary.add_label(request.fact_id, request.label, request.by.strip(), note)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        state.label_suggestions = [s for s in state.label_suggestions
+                                   if not (s["fact_id"] == request.fact_id and s["label"].upper() == request.label.upper())]
+        state.save_label_suggestions()
+        return {"fact_id": definition.id, "labels": list(definition.labels),
+                "next": "Read the files again (POST /api/inputs/reread) so code reads the new label."}
 
     @app.get("/api/confidence")
     def confidence_status():
@@ -364,7 +758,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
                  "status": f.status, "why_now": why} for f, _score, why in order[:limit]]
 
     @app.get("/api/evidence")
-    def evidence(file: str, locator: str = ""):
+    def evidence_near(file: str, locator: str = ""):
         """The part of an uploaded drawing that a value was read from, as a PNG."""
         path = state.data_dir / "uploads" / Path(file).name
         if not path.exists() or path.suffix.lower() != ".pdf":
@@ -392,13 +786,26 @@ def create_app(state: AppState | None = None) -> FastAPI:
                                          "open for review. Undo that answer first to answer again.")
             raise HTTPException(404, f"No reviewable fail for rule {request.rule_id} and {request.subject}. "
                                      "Run the checks again: the finding may have changed.")
+        weak = [i for i in finding.inputs if i.get("tier") in ("C", "D") and i.get("id")]
+        # Only a fail teaches the model. Other answers, like one on a held-back pass, are kept but never trained on.
+        trainable = (finding.original_status == Status.FAIL and finding.evidence is not None
+                     and bool(finding.evidence.facts) and finding.evidence.limit != 0)
         try:
-            row = confidence.make_label(finding, state.store(request.profile), request.decision,
-                                        corrected_value=request.corrected_value,
-                                        corrected_unit=request.corrected_unit, note=request.note,
-                                        reviewer=request.reviewer)
+            if trainable:
+                row = confidence.make_label(finding, state.store(request.profile), request.decision,
+                                            corrected_value=request.corrected_value,
+                                            corrected_unit=request.corrected_unit, note=request.note,
+                                            reviewer=request.reviewer)
+            else:
+                row = confidence.plain_answer(finding, request.decision, _read_of(weak),
+                                              corrected_value=request.corrected_value,
+                                              corrected_unit=request.corrected_unit, note=request.note,
+                                              reviewer=request.reviewer)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
+        by = request.reviewer.strip() or "Engineer"
+        state.unconfirm_answer(row["key"])  # a second answer replaces the first
+        row["confirmed_ids"] = state.confirm_readings([i["id"] for i in weak], by) if request.decision == "accept" else []
         recorded = []
         if row["corrected_value"] is not None and row["read"]:
             read = row["read"]
@@ -417,6 +824,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
     def undo_feedback(profile: str, key: str):
         """Take an answer back: the label leaves the pool, its correction leaves the facts, the model refits."""
         before = state.result(profile)
+        state.unconfirm_answer(key)
         if state.gate.undo(key) is None:
             raise HTTPException(404, "No saved answer has that key.")
         state.drop_correction(key)
@@ -433,6 +841,12 @@ def create_app(state: AppState | None = None) -> FastAPI:
         before = state.result(profile)
         if not any(p == request.property for _, p, kind, _m in VOCABULARY if kind == "length"):
             raise HTTPException(400, f"Not a measurable property: {request.property}")
+        # The value must come from the two points: their straight, vertical, or horizontal distance.
+        dx, dy, dz = request.a.x - request.b.x, request.a.y - request.b.y, request.a.z - request.b.z
+        picked = [math.sqrt(dx * dx + dy * dy + dz * dz) * 25.4, abs(dz) * 25.4, math.hypot(dx, dy) * 25.4]
+        from .units import to_mm as length_mm
+        if not math.isfinite(request.value) or all(abs(length_mm(request.value, request.unit) - mm) > max(5.0, 0.01 * mm) for mm in picked):
+            raise HTTPException(400, f"The value doesn't match the picked points: they are {picked[0]:.0f} mm apart.")
         locator = f"picked points ({request.a.x:.1f}, {request.a.y:.1f}, {request.a.z:.1f}) to ({request.b.x:.1f}, {request.b.y:.1f}, {request.b.z:.1f}) in"
         fact = Fact(subject=request.subject, property=request.property, value=request.value, unit=request.unit,
                     source=Source(kind=SourceKind.MEASUREMENT, locator=locator, quote=request.note),
@@ -452,6 +866,32 @@ def create_app(state: AppState | None = None) -> FastAPI:
     if dist.exists():
         app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
     return app
+
+
+def _read_of(weak: list[dict]) -> dict | None:
+    """What was read, in the shape a saved answer keeps, from a finding's first unconfirmed input."""
+    if not weak:
+        return None
+    first = weak[0]
+    return {"subject": first["subject"], "property": first["property"], "value": first["value"], "unit": first["unit"],
+            "quote": first.get("quote", ""), "file": first.get("file", ""), "locator": first.get("locator", ""), "reader": ""}
+
+
+def checked_value(subject: str, prop: str, value, unit: str):
+    """A value an engineer gives, checked before it is saved: a defined fact, a finite number, a length unit."""
+    definition = dictionary.for_fact(subject, prop)
+    if definition is None:
+        raise HTTPException(400, f"{subject} {prop} isn't a fact the checks know.")
+    if definition.kind in ("length", "number"):
+        try:
+            value = float(value)
+        except (TypeError, ValueError) as error:
+            raise HTTPException(400, f"{prop.replace('_', ' ')} needs a number, not {value!r}.") from error
+        if not math.isfinite(value) or value < 0:
+            raise HTTPException(400, f"{prop.replace('_', ' ')} must be a finite number, zero or more.")
+        if definition.kind == "length" and not is_length_unit(unit):
+            raise HTTPException(400, "Give a length unit: mm, cm, m, in or ft.")
+    return value, unit.strip().lower()
 
 
 def _ship_file(state: AppState, name: str, media_type: str) -> FileResponse:

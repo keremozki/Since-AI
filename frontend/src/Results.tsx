@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Accuracy, api, Finding, Inputs, RunResult, Status } from "./api";
 import { NO_SOURCE, originsOf, shortDeck, STATUS_LABEL, STATUS_ORDER, StatusIcon } from "./shared";
 
+const MAIN_TILES: Status[] = ["fail", "conflict", "cant_tell", "pass"];
 const groupKey = (f: Finding) => `${f.status}|${f.rule_id}`;
 const same = (a: Finding | null, b: Finding) => a?.rule_id === b.rule_id && a?.subject === b.subject;
 
@@ -77,7 +78,7 @@ export default function Results({ result, inputs, selected, onSelect }: {
   return (
     <section className="results" aria-label="Results">
       <div className="tiles" role="group" aria-label="Filter results">
-        {STATUS_ORDER.map((status) => (
+        {STATUS_ORDER.filter((status) => MAIN_TILES.includes(status) || (result.counts[status] ?? 0) > 0).map((status) => (
           <button type="button" key={status} className={`tile ${status}`} aria-pressed={filter === status}
             onClick={() => setFilter(filter === status ? null : status)}>
             <b>{inOrigin.filter((f) => f.status === status).length}</b>
@@ -142,6 +143,7 @@ export default function Results({ result, inputs, selected, onSelect }: {
                             </span>
                             <span className="finding-text">
                               {finding.gap ? <><b>{finding.gap}</b> · {finding.measured}</> : finding.measured}
+                              {finding.gate && <em className="needs-confirm"> · {finding.gate.startsWith("Would fail") ? "Would fail. " : ""}Needs confirming</em>}
                             </span>
                             <small className="finding-origin">From: {originsOf(finding, inputs).join(", ") || NO_SOURCE}</small>
                           </button>
@@ -170,7 +172,7 @@ export default function Results({ result, inputs, selected, onSelect }: {
 }
 
 function isOpen(status: Status, toggled: boolean): boolean {
-  const openByDefault = status !== "pass";
+  const openByDefault = status !== "pass" && status !== "not_applicable";
   return toggled ? !openByDefault : openByDefault;
 }
 

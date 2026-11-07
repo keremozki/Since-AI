@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 P = "passenger-test"
 DEMO_PDF = ROOT / "data" / "demo_offline_SYNTHETIC" / "SYNTHETIC_demo_2_FAIL.pdf"
 POINT = {"x": 0, "y": 0, "z": 0}
+POINT2 = {"x": 0, "y": 0}
 
 # (method, path, kwargs, expected status). The order matters: the upload comes before the routes that use it.
 CALLS = [
@@ -22,6 +23,20 @@ CALLS = [
     ("GET", "/api/accuracy", {}, 200),
     ("GET", "/api/vocabulary", {}, 200),
     ("GET", "/api/inputs", {}, 200),
+    ("GET", "/api/shipcard", {}, 200),
+    ("POST", "/api/shipcard/confirm", {"json": {"field": "no_such_field", "value": 1, "by": "Test"}}, 400),
+    ("GET", "/api/basis", {}, 200),
+    ("POST", "/api/whatif", {"json": {"changes": {"passengers": 3000}}}, 200),
+    ("GET", "/api/ai/status", {}, 200),
+    ("POST", "/api/facts/confirm", {"params": {"profile": P}, "json": {"id": "no-such-id", "by": "Test"}}, 404),
+    ("POST", "/api/facts/state", {"params": {"profile": P}, "json": {"subject": "ship", "property": "no_such_fact", "value": 1, "by": "Test"}}, 400),
+    ("GET", f"/api/proof/{P}", {}, 200),
+    ("POST", "/api/sightline", {"params": {"profile": P}, "json": {"file": "none.pdf", "page": 1, "eye": POINT2, "obstruction": POINT2, "bow": POINT2, "by": "Test"}}, 404),
+    ("GET", "/api/sightline.png", {}, 404),
+    ("GET", "/api/evidence/crop", {"params": {"file": "none.pdf", "page": 1, "x0": 0, "y0": 0, "x1": 1, "y1": 1}}, 404),
+    ("POST", "/api/inputs/reread", {"params": {"profile": P, "name": "none.pdf"}}, 404),
+    ("GET", "/api/dictionary/suggestions", {}, 200),
+    ("POST", "/api/dictionary/approve", {"json": {"fact_id": "ship.length_overall", "label": "X", "by": " "}}, 400),
     ("POST", "/api/upload", {"data": {"profile": P}, "files": {"file": (DEMO_PDF.name, DEMO_PDF.read_bytes(), "application/pdf")}}, 200),
     ("GET", "/api/evidence", {"params": {"file": DEMO_PDF.name, "locator": "page 1"}}, 200),
     ("GET", "/api/confidence", {}, 200),
@@ -62,7 +77,7 @@ def test_every_route_answers_without_a_crash(api):
 
 def test_every_route_is_in_the_smoke_test(api):
     templates = {"/api/run/{profile_id}": f"/api/run/{P}", "/api/report/{profile_id}": f"/api/report/{P}",
-                 "/api/review-queue/{profile_id}": f"/api/review-queue/{P}", "/api/inputs/group/{group}": "/api/inputs/group/chat"}
+                 "/api/review-queue/{profile_id}": f"/api/review-queue/{P}", "/api/proof/{profile_id}": f"/api/proof/{P}", "/api/inputs/group/{group}": "/api/inputs/group/chat"}
     routes = {(m, templates.get(r.path, r.path)) for r in api.app.routes for m in (getattr(r, "methods", None) or [])
               if r.path.startswith(("/api", "/model"))}
     assert routes == {(m, p) for m, p, _k, _e in CALLS}

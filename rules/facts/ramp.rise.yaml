@@ -1,0 +1,12 @@
+id: ramp.rise
+subject: ramp:.+
+property: rise
+kind: length
+meaning: Vertical rise of a ramp run (PVAG V405.2).
+ai_pointing: false
+range:
+- 10
+- 5000
+unit_hint: mm
+used_by:
+- PVAG V405.2

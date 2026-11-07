@@ -6,27 +6,51 @@ regulations, and tells the engineer what passes, what fails, where sources confl
 **Coded tests decide every result. AI never does.** Claude reads drawings and documents into facts,
 records values the engineer states in chat, and answers questions. Every fact keeps its source.
 
-Every result is one of four:
+Every result is one of six:
 
 | Result | Meaning |
 |---|---|
-| Pass | Tested and within the limit |
-| Fail | Tested and outside the limit, with the measured value, the limit, and the gap |
+| Pass | Tested and within the limit, on inputs that are proven (tier A or B) |
+| Fail | Tested and outside the limit, with the measured value, the limit, the gap, and a fix |
 | Conflict | Sources disagree, so any check that needs the value waits |
-| Can't tell | A value is missing. The tool names it and asks for it. It never guesses |
+| Can't tell | A value is missing or unproven. The tool names it and asks for it. It never guesses |
+| Needs review | A rule written in words: an engineer decides |
+| Not applicable | The rule doesn't cover this item, and the result says why |
 
 If everything passes, the app says no issues were found and lists which rules it covered. It never
 claims that a ship is compliant overall: class and the flag state make the final call.
 
+## What it does
+
+- **Reads** PDF, images, XLSX, CSV, IFC, and Navisworks `.nwd`: every value keeps its file, page, box, and quote.
+- **Trust levels:** only exact values (A) or values read two independent ways (B) can back a pass or a fail. One
+  reading (C) or a problem (D) gives can't tell, and an engineer can confirm or correct it (`backend/app/tiers.py`).
+- **Ship card and design basis:** the rules that apply come from type, size, persons, voyage, and dates, each with
+  its clause (`rules/applicability.yaml`). Choose the profile "rules chosen by the ship card".
+- **Learns from engineers:** a confidence model, and reader lessons from every misread (below).
+- **Proof files** that `tools/verify_proof.py` checks: hashes, quotes, replay.
+- **Revisions**, **what-if** and sister hulls, a **drawing scale check**, the **SOLAS V/22 sight line** on a drawing,
+  and **label suggestions** an engineer approves. What-if, the sight line, and label approval are in the API only.
+- **Offline AI by default:** no request leaves the machine unless `AI_MODE=api` or `record` is set. See
+  `docs/ai-offline.md`.
+- **Scoreboard** on a synthetic, team-made package (`samples/meyer-style-v1`): `tools/scoreboard.py`. It is a
+  regression and reading test we wrote ourselves, not a validation on real Meyer data.
+
+Details: `docs/ARCHITECTURE.md`. The overnight build plan and scoreboard are in `docs/overnight/`.
+
 ## How it works
 
-1. **Read:** 3D model parts, 2D drawings, documents, and chat answers become one list of facts.
-2. **Scope:** ship type, passengers, and flag decide which rules apply.
+1. **Read:** 3D model parts, 2D drawings, documents, and chat answers become one list of facts, each with a trust level.
+2. **Scope:** the ship card, or a fixed profile, decides which rules apply.
 3. **Test:** each rule runs as code in `backend/app/checks.py`, with limits in `rules/rules.yaml`.
-4. **Report:** plain-text findings, with markers in the 3D viewer.
+4. **Hold back:** the confidence gate can move a likely misread from fail to can't tell. The tier gate holds any
+   pass or fail that rests on an unconfirmed reading. Neither can create a fail or a pass.
+5. **Report:** findings with their inputs and clause, markers in the 3D viewer, a text report, and a proof file.
 
-A rule's limit counts as confirmed only when its `quote` in `rules/rules.yaml` appears word for word in
-the rule texts under `docs/rules/`. Until then, its findings are marked provisional.
+A rule's limit counts as confirmed only when its quote appears word for word in the rule texts under `docs/rules/`.
+Until then, its findings are marked provisional. The IMO excerpts and their quotes are local files for now, kept out
+of this public repo because IMO bars commercial reuse of its texts. In a fresh clone those limits still run, but show
+as not confirmed.
 
 ### Reading the 3D model
 
@@ -36,11 +60,12 @@ files may not work. Engineers can also click two points in the viewer to measure
 
 ## Set up
 
-You need Python 3.12 or later and Node 20 or later. The ship files aren't in this repo: get them from
-the Since AI App, and put the model's `.nwd` file and the prototype viewer page somewhere local.
+You need **Python 3.12** and Node 20 or later. Newer Python versions don't work yet, because the OCR package
+doesn't install on them. The ship files aren't in this repo: get them from the Since AI App, and put the model's
+`.nwd` file and the prototype viewer page somewhere local.
 
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
 .venv/Scripts/pip install -r backend/requirements.txt       # on macOS or Linux: .venv/bin/pip
 npm --prefix frontend install
 npm --prefix frontend run build
@@ -50,14 +75,18 @@ npm --prefix frontend run build
 .venv/Scripts/python tools/accuracy_report.py                 # writes the scoreboard
 ```
 
-Copy `.env.example` to `.env` and add your Anthropic API key. Then start the app:
+Copy `.env.example` to `.env`. The AI runs offline by default (`AI_MODE=offline`): requests are saved
+and replayed once answered, so nothing is sent anywhere. To use the real API, add your Anthropic API key
+and set `AI_MODE=record` (or `api`). Then start the app:
 
 ```bash
 cd backend
 ../.venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
 
-Open http://127.0.0.1:8000. The checks, vector PDF drawings, and the offline demo work with no API key. Chat, images, and scanned drawings need one.
+Open http://127.0.0.1:8000. The checks and the code readers work with no API key. With `AI_MODE=offline`, the
+default, chat and the AI reading steps wait for a recorded answer (`tools/ai_offline.py`). To use the real API,
+set a key and `AI_MODE=record` or `api`.
 
 ## Managing inputs
 
@@ -72,15 +101,17 @@ can be removed, and the checks rerun at once. The app holds one 3D model at a ti
 
 ## Confidence gate (learns from engineers)
 
-**What the engineer answers:** "Was this value read correctly from the drawing?" They judge the reading,
-not the ship. Next to the question they see where the value came from: the file, the place on the page,
-the text it was read from, and a close-up of the drawing.
+**What the engineer answers:** "Was this value read correctly?" They judge the reading, not the ship. Next to
+the question they see where the value came from: the file, the place on the page, the text it was read from, and a
+close-up of the drawing. The same question appears on every fail, and on any result held back by a weak reading.
 
-| Button | Label |
-|---|---|
-| **Read correctly** | 1 |
-| **Misread** (the right value and unit are optional) | 0. A right value becomes an engineer fact that replaces the reading, and the check reruns |
-| **Not sure** | No label. Logged, never trained on |
+| Button | What it does | Label |
+|---|---|---|
+| **Read correctly** | Confirms the reading, so it can back the result | 1 |
+| **Misread** (the right value and unit are optional) | A right value becomes an engineer fact that replaces the reading, and the check reruns | 0 |
+| **Not sure** | Nothing changes | None. Logged, never trained on |
+
+Only fails teach the model. An answer on a held-back pass is saved and can be undone, but it isn't trained on.
 
 Each answer is one row in `ship-data/confidence/labels.jsonl`, with who gave it and when. Any answer can
 be undone; the model then refits without it. The model starts after **30 answers with at least 8 "read
@@ -112,6 +143,15 @@ data, never as instructions. To measure it on drawings the lessons did not come 
 It reads every drawing with a truth file, turns the mistakes on half of them into corrections (the truth
 file stands in for the engineer), and compares the other half read with and without those lessons.
 
+## How a file is read
+
+Every upload first goes through the reading pipeline (`backend/app/reading/`): text layer and OCR, labeled values
+found by code, the AI pointing at lines that code then verifies, and a second reading of each value. Schedules and
+IFC models are read as data. PDFs then also go through the drawing reader below, for door tags, corridors, and ramps.
+Each value it finds is read again by OCR of its line (`reading/code_reader.py`): if the digits agree and the label's
+pairing is clear it is tier B, otherwise it stays below B. Label and value are tied by position, so it never reaches A.
+If code finds nothing at all, like on a clean scan, the AI reads the whole page, and those values stay at tier C.
+
 ## Reading vector PDFs with code
 
 `backend/app/drawing.py` reads a PDF's text layer with no API: door tags, clear widths in any unit
@@ -119,8 +159,7 @@ file stands in for the engineer), and compares the other half read with and with
 clear widths (label, next line, or corridor schedule) and ramp slopes (`1:12`, or rise and run). For
 corridors and ramps, rotated value text and numbers with no unit are not used: the result is can't tell.
 It never scales a size off the lines. Each fact records how it was read (pairing distance, ambiguity, OCR, scale), which the
-confidence model uses. A reading with low confidence never passes. The AI reader runs only when code
-finds nothing, or on every file with `CROSS_CHECK_READERS=1`.
+confidence model uses. A reading with low confidence never passes.
 
 ```bash
 .venv/Scripts/python tools/validate_data.py        # reader and checks vs every truth file in data/
@@ -154,12 +193,17 @@ hand-checked door set, faults seeded one at a time, and a run with all dimension
 
 ## Known limits
 
-- Rule texts in `docs/rules/` cover COLREG, PVAG, and ADA. SOLAS, the FSS Code, and MSC.1/Circ.1533 aren't
-  there yet, so those limits are still provisional. DNV rules couldn't be retrieved.
+- Rule texts in this repo cover COLREG, PVAG, and ADA. Local excerpts of the adopted SOLAS, FSS Code, and
+  MSC.1/Circ.1533 texts confirm 6 more limits on the team's machines only (see "How it works"). These are adopted
+  texts, not consolidated editions, and later amendments were checked only in places. The liferaft rule
+  `SOLAS-III-RAFTS` (100% each side) can't be traced to a clause yet, so it stays marked not confirmed. DNV rules
+  couldn't be retrieved.
+- Persons on board must be stated. Crew and science are never added up, because that could undercount.
 - The door check uses PVAG V404.2.3, which is a proposed rule, not in force. ADA 404.2.3 sets the same limit,
   but the ADA Standards don't state that they apply to vessels.
-- The door check doesn't test the 36 in limit for openings more than 24 in deep, because the model doesn't
-  state opening depth.
+- The 3D model doesn't state opening depth, so the passenger profiles keep the approved assumption that door
+  openings aren't more than 24 in deep. The ship card profile (`card`) makes no such assumption: a door
+  between 32 and 36 in passes only when its stated depth is 24 in or less, and with no depth it's "can't tell".
 - The hand-checked set was typed from the model's own description text, so it tests our parsing and
   logic, not whether the model itself is right. An engineer should spot-check it against the drawings.
 - The RCRV is a research vessel, so passenger ship rules don't apply to it. The "passenger test" profile

@@ -3,10 +3,13 @@
 # A rule counts as verified only when its `quote` is found word for word in the
 # rule texts under docs/rules/. Until then its findings are marked provisional.
 #
-# SOLAS, the FSS Code, and MSC.1/Circ.1533 aren't in docs/rules yet, so those limits
-# come from the team's concept note and stay provisional.
+# The IMO texts (SOLAS, FSS Code, MSC.1/Circ.1533, SPS Code) are excerpts of the adopted texts in docs/rules/imo/.
+# IMO bars commercial reuse of its texts, so that folder stays local and out of this public repo for now, along with
+# these rules' quotes (rule-quotes.yaml there). Without it, the limits below still run but show as not confirmed.
+# They are adopted texts, not consolidated editions: later amendments are listed there where they were checked.
 #
-# Every `scope` is checked against the ship profile before the rule runs.
+# Every `scope` is checked against the ship profile before the rule runs. With a ship card, the
+# conditions in rules/applicability.yaml decide instead, by type, size, persons and dates.
 
 rules:
   # PVAG, not ADA: PVAG is written for passenger vessels, while the ADA Standards don't state
@@ -21,6 +24,12 @@ rules:
       min_mm: 815
       # V404.2.3 exception 3: doors to stairways may follow the administrative authority instead.
       stairway_door_exception: true
+      # Same paragraph: openings more than 24 in (610 mm) deep need 36 in (915 mm).
+      deep_opening_in: 24
+      deep_min_in: 36
+      deep_min_mm: 915
+    edition: PVAG NPRM 78 FR 38102 (25 June 2013), proposed
+    fix: Widen the clear opening to at least 32 in (815 mm), or 36 in (915 mm) where the opening is more than 24 in deep.
     scope:
       ship_types: [passenger]
       min_passengers: 150
@@ -64,7 +73,7 @@ rules:
   - id: FSS-13-STAIR
     title: Escape stair clear width
     area: Escape and evacuation
-    source: FSS Code chapter 13
+    source: FSS Code ch. 13, 2.1.1
     check: stair_width
     missing_text: FSS Code ch. 13
     params:
@@ -72,25 +81,33 @@ rules:
       # Our own margin, not a rule value: a tread longer than the limit by less than
       # this might still be narrower than the limit once handrails are fitted.
       handrail_allowance_mm: 100
+      # FSS 13 2.1.1: plus 10 mm for every person over 90 (two thirds of the crew plus all passengers served).
+      per_person_mm: 10
+      base_persons: 90
+    edition: FSS Code (Res. MSC.98(73)), chapter 13, 2.1.1, original adopted text
+    fix: Widen the stair between handrails to the required width, or reroute persons to another stair.
     scope:
       ship_types: [passenger]
       reason: Passenger ship escape stairs have a minimum clear width.
-    quote: ""
+    quote: ""  # In docs/rules/imo/rule-quotes.yaml, a local file
 
   - id: MSC.1-CIRC.1533
     title: Evacuation time
     area: Escape and evacuation
-    source: IMO MSC.1/Circ.1533
+    source: MSC.1/Circ.1533 annex 1, 5.1-5.2
     check: evacuation_time
     missing_text: MSC.1/Circ.1533
     params:
       max_minutes: 60
       max_minutes_large: 80
       large_zone_count: 3
+      max_e_plus_l_minutes: 30
+    edition: MSC.1/Circ.1533 (6 June 2016), annex 1 paragraph 5.2; copy published by Deutsche Flagge
+    fix: Rework escape routes or stair capacity in the zones that govern the time, then rerun the analysis.
     scope:
       ship_types: [passenger]
       reason: Passenger ships need an evacuation analysis.
-    quote: ""
+    quote: ""  # In docs/rules/imo/rule-quotes.yaml, a local file
 
   - id: SOLAS-III-RAFTS
     title: Survival craft capacity
@@ -107,15 +124,19 @@ rules:
   - id: SOLAS-V-22
     title: Bridge visibility
     area: Navigation
-    source: SOLAS Chapter V, Regulation 22
+    source: SOLAS V/22.1.1
     check: bridge_visibility
     missing_text: SOLAS V/22
     params:
       max_ship_lengths: 2
       max_metres: 500
+    edition: SOLAS V/22.1.1 (Res. MSC.99(73)); length overall per V/2.4 (Res. MSC.142(77))
+    fix: Raise the conning position eye height, lower or move the forward obstruction, or check the worst loading condition.
     scope:
-      reason: Bridge visibility applies to every ship with a SOLAS certificate.
-    quote: ""
+      reason: >-
+        SOLAS V/22.1 covers ships of 55 m or more in length overall, constructed on or after 1 July 1998. The fixed
+        profiles don't test length or date; the ship card (profile "card") does.
+    quote: ""  # In docs/rules/imo/rule-quotes.yaml, a local file
 
   - id: COLREG-ANNEX-I
     title: Masthead light height
@@ -125,6 +146,8 @@ rules:
     params:
       min_m: 6
       cap_m: 12
+    edition: COLREG 1972 Annex I 2(a)(i), USCG handbook corrected 8 August 2024
+    fix: Raise the forward masthead light to the required height above the uppermost continuous deck.
     scope:
       reason: Annex I 2(a) covers power-driven vessels of 20 meters or more in length.
     quote: >-
@@ -132,3 +155,48 @@ rules:
       above the hull of not less than 6 meters, and, if the breadth of the vessel exceeds 6 meters, then at
       a height above the hull not less than such breadth, so however that the light need not be placed at a
       greater height above the hull than 12 meters;
+
+  # Added overnight (2026-11-07). New passenger-ship rules from the reading design.
+  - id: SOLAS-III-21-LIFEBOATS
+    title: Lifeboat capacity on each side
+    area: Lifesaving
+    source: SOLAS III/21.1.1.1
+    edition: SOLAS III/21.1.1.1 as adopted by Res. MSC.47(66), in force 1 July 1998 (Tractatenblad 1998 nr. 155 text); later amendments not checked
+    check: lifeboat_capacity
+    missing_text: SOLAS III/21
+    params:
+      each_side_fraction: 0.5
+    fix: Add lifeboat capacity on the short side. The Administration may allow liferafts for part of it, but never under 37.5% per side in lifeboats.
+    scope:
+      ship_types: [passenger]
+      reason: SOLAS III/21.1.1 covers passenger ships on international voyages that aren't short international voyages. SPS Code 8.2 sends special purpose ships with more than 60 persons here too.
+    quote: ""  # In docs/rules/imo/rule-quotes.yaml, a local file
+
+  - id: SOLAS-III-21-LIFERAFTS
+    title: Additional liferaft capacity
+    area: Lifesaving
+    source: SOLAS III/21.1.1.2
+    edition: SOLAS III/21.1.1.2 as adopted by Res. MSC.47(66), in force 1 July 1998 (Tractatenblad 1998 nr. 155 text); later amendments not checked
+    check: liferaft_total
+    missing_text: SOLAS III/21
+    params:
+      total_fraction: 0.25
+    fix: Add liferafts until their total capacity covers at least 25% of persons on board, served by a launching appliance on each side.
+    scope:
+      ship_types: [passenger]
+      reason: SOLAS III/21.1.1.2 requires liferafts for a further 25% of persons on board, in addition to the lifeboats.
+    quote: ""  # In docs/rules/imo/rule-quotes.yaml, a local file
+
+  - id: SOLAS-II-2-13.3.2.7
+    title: Evacuation analysis early in design
+    area: Escape and evacuation
+    source: SOLAS II-2/13.3.2.7
+    edition: SOLAS II-2/13.3.2.7 as adopted by Res. MSC.404(96), in force 1 January 2020
+    check: evacuation_analysis_exists
+    missing_text: SOLAS II-2/13.3.2.7
+    fix: Run the evacuation analysis to MSC.1/Circ.1533 now, while escape routes can still change.
+    scope:
+      ship_types: [passenger]
+      reason: Passenger ships need an evacuation analysis early in the design process.
+    quote: ""  # In docs/rules/imo/rule-quotes.yaml, a local file
+

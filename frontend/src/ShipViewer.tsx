@@ -13,7 +13,8 @@ const DECKS: [string, number][] = [["Second", 10], ["Main", 19], ["01", 28], ["0
 const HEADROOM_IN = 84;
 const LEGEND: Status[] = ["fail", "conflict", "cant_tell"];
 
-const STATUS_HEX: Record<Status, number> = { pass: 0x2e8b57, fail: 0xd13438, conflict: 0xe07b12, cant_tell: 0x7d8894 };
+const STATUS_HEX: Record<Status, number> = { pass: 0x2e8b57, fail: 0xd13438, conflict: 0xe07b12, cant_tell: 0x7d8894,
+  needs_review: 0x6b57c2, not_applicable: 0xb0b8c1 };
 const SHIP_CENTRE = new THREE.Vector3(-1000, 0, 400);
 const FULL_CUT = 1300;
 const CUT_ABOVE_FINDING_IN = 95;

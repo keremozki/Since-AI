@@ -1,0 +1,16 @@
+id: liferaft.capacity_persons
+subject: liferaft
+property: capacity_persons
+kind: number
+meaning: Rated capacity of each liferaft, in persons.
+labels:
+- LIFERAFT
+- LIFE RAFT
+- PERSONS LIFERAFT
+- MAN LIFERAFT
+not: []
+usually_on:
+- LSA plan
+range:
+- 4
+- 150

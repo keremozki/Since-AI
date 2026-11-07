@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.confidence import ConfidenceGate, features, make_label, shown_status
 from app.engine import run
 from app.main import AppState, create_app
-from app.models import Evidence, Fact, Finding, Rule, Source, SourceKind, Status
+from app.models import CheckBasis, Fact, Finding, Rule, Source, SourceKind, Status
 from app.profiles import PROFILES
 from app.store import FactStore
 
@@ -24,7 +24,7 @@ def fail(value_in=30.0, **kw):
     fact = width_fact(value_in, **kw)
     return Finding(rule_id="D", rule_title="Door", area="A", rule_source="S", status=Status.FAIL, subject=fact.subject,
                    label="Door 1", measured=f"{value_in} in",
-                   evidence=Evidence(measured=value_in * 25.4, limit=32 * 25.4, limit_unit="in", facts=[fact]))
+                   evidence=CheckBasis(measured=value_in * 25.4, limit=32 * 25.4, limit_unit="in", facts=[fact]))
 
 
 def gate(tmp_path, **kw):

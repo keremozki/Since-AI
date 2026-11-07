@@ -1,0 +1,9 @@
+id: door.shown_on
+subject: door-number:[\w.-]+
+property: shown_on
+kind: text
+meaning: The sheet or page where a door is tagged, when no usable width is written
+  for it.
+ai_pointing: false
+used_by:
+- PVAG V404.2.3

@@ -1,0 +1,19 @@
+id: ship.depth
+subject: ship
+property: depth
+kind: length
+meaning: Moulded depth.
+labels:
+- DEPTH
+- HULL DEPTH
+- DEPTH (MLD)
+- MOULDED DEPTH
+- D
+not:
+- DRAFT
+- DRAUGHT
+usually_on:
+- GA particulars
+range:
+- 1
+- 60

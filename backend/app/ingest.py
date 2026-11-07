@@ -26,7 +26,9 @@ TEXT_TYPES = {".md", ".txt"}
 MAX_UPLOAD_MB = 50
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 MAX_PDF_PAGES = 200
-SUPPORTED = "Use PDF, PNG, JPG, WEBP, MD, or TXT."
+TABLE_AND_MODEL_TYPES = {".xlsx", ".csv", ".ifc"}  # read by the reading pipeline
+WHOLE_PAGE_AI_TYPES = {".pdf", *IMAGE_TYPES}  # the AI can read these when code finds nothing
+SUPPORTED = "Use PDF, PNG, JPG, WEBP, XLSX, CSV, IFC, MD, or TXT."
 
 SYSTEM = f"""You read ship design documents and drawings for a compliance tool.
 Report only values that are written or dimensioned in the input. Never estimate, scale from the
@@ -86,7 +88,7 @@ def check_file(filename: str, data: bytes, pages: list[int] | None = None) -> No
     if len(data) > MAX_UPLOAD_BYTES:
         raise FileTooLarge(f"{filename} is {len(data) / 1024 / 1024:.0f} MB; the limit is {MAX_UPLOAD_MB} MB. "
                            "Upload only the sheets you need.")
-    if suffix not in {".pdf", *IMAGE_TYPES, *TEXT_TYPES}:
+    if suffix not in {".pdf", *IMAGE_TYPES, *TEXT_TYPES, *TABLE_AND_MODEL_TYPES}:
         raise FileProblem(f"Unsupported file type: {suffix or filename}. {SUPPORTED}")
     if suffix != ".pdf":
         return  # images and text go to the AI reader, which reports its own errors

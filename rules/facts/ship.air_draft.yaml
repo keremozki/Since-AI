@@ -1,0 +1,17 @@
+id: ship.air_draft
+subject: ship
+property: air_draft
+kind: length
+meaning: Height of the highest point above the waterline. Check which datum is used
+  (waterline or baseline).
+labels:
+- AIR DRAFT
+- AIR DRAUGHT
+not:
+- DESIGN DRAFT
+usually_on:
+- GA particulars
+- inboard profile
+range:
+- 1
+- 100

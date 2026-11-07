@@ -10,6 +10,7 @@ from app.rules import load_rules
 from app.store import FactStore
 
 ROOT = Path(__file__).resolve().parents[2]
+HAS_IMO_TEXTS = (ROOT / "docs" / "rules" / "imo" / "rule-quotes.yaml").exists()  # local files, not in the public repo
 PASSENGER = PROFILES["passenger-test"]
 SRC = Source(kind=SourceKind.CHAT)
 
@@ -118,9 +119,23 @@ def test_stair_within_handrail_margin_is_cant_tell_not_pass():
     assert stairs('MODEL 36"L x 9"W').status == Status.CANT_TELL
 
 
-def test_stair_well_above_limit_passes_at_medium_confidence():
+def test_stair_well_above_limit_still_needs_the_persons_served():
+    # FSS 13 2.1.1 adds 10 mm per person over 90, so no width can pass without the persons served.
     finding = stairs('MODEL 40"L x 9"W')
-    assert finding.status == Status.PASS and finding.confidence == "medium"
+    assert finding.status == Status.CANT_TELL and "persons" in finding.question
+
+
+def test_stair_with_persons_served_passes_or_fails_on_the_fss_formula():
+    def with_persons(n, tread='MODEL 40"L x 9"W'):
+        part = {"name": "STAIR TREADS INTERIOR 1", "x_in": 0.0, "y_in": 0.0, "z_in": 200.0, "description": tread}
+        facts = facts_from_parts("model", [part])
+        subject = next(f.subject for f in facts if f.subject.startswith("stair:"))
+        return check_stair_width(STAIR_RULE, FactStore(facts + [fact(subject, "persons_served", float(n))]), PASSENGER)[0]
+
+    assert with_persons(60).status == Status.PASS  # 1016 mm against 900 mm, with the 100 mm handrail margin
+    assert with_persons(100).status == Status.CANT_TELL  # 1016 mm against 1000 mm: inside the handrail margin
+    finding = with_persons(150)  # needs 1500 mm
+    assert finding.status == Status.FAIL and finding.gap == "484 mm short"
 
 
 def test_stair_without_dimension_is_cant_tell():
@@ -143,17 +158,18 @@ def test_raft_capacity_is_checked_per_side():
     assert results == {"liferaft:port": Status.FAIL, "liferaft:starboard": Status.PASS}
 
 
-def test_persons_on_board_can_come_from_crew_plus_science():
-    results = rafts(fact("ship", "crew_complement", 12.0), fact("ship", "science_complement", 16.0),
-                    fact("liferaft", "capacity_persons", 16.0))
-    assert "28 on board" in results[0].required
+def test_persons_on_board_is_asked_for_never_added_up():
+    finding = rafts(fact("ship", "crew_complement", 12.0), fact("ship", "science_complement", 16.0),
+                    fact("liferaft", "capacity_persons", 16.0))[0]
+    assert finding.status == Status.CANT_TELL
+    assert "How many persons" in finding.question
 
 
-def test_disagreeing_crew_counts_block_the_raft_check():
-    finding = rafts(fact("ship", "crew_complement", 12.0), fact("ship", "crew_complement", 13.0),
-                    fact("ship", "science_complement", 16.0), fact("liferaft", "capacity_persons", 16.0))[0]
+def test_disagreeing_persons_on_board_block_the_raft_check():
+    finding = rafts(fact("ship", "persons_on_board", 28.0), fact("ship", "persons_on_board", 29.0),
+                    fact("liferaft", "capacity_persons", 16.0))[0]
     assert finding.status == Status.CONFLICT
-    assert "crew count" in finding.measured
+    assert "persons on board" in finding.measured
 
 
 def test_conflict_shows_each_value_once_and_ties_sources_to_values():
@@ -209,8 +225,29 @@ def test_masthead_limit_follows_beam_up_to_cap():
 
     assert status(11.0, 12.5) == Status.FAIL  # Beam 12.5 m, capped at 12 m.
     assert status(12.0, 12.5) == Status.PASS
-    assert status(6.0, 5.0) == Status.PASS
+    # COLREG Rule 3(j) uses greatest breadth, which can exceed the moulded beam. With only a 5.0 m beam
+    # known, a 6.0 m light passes only if the greatest breadth is 6 m or less, so this can't be a pass.
+    assert status(6.0, 5.0) == Status.CANT_TELL
     assert status(5.9, 5.0) == Status.FAIL
+
+
+def test_masthead_uses_greatest_breadth_when_stated():
+    def check(height, greatest, beam=None):
+        facts = [fact("masthead_forward", "height_above_hull", height, "m"), fact("ship", "breadth_greatest", greatest, "m")]
+        if beam is not None:
+            facts.append(fact("ship", "beam", beam, "m"))
+        return check_masthead_height(MAST_RULE, FactStore(facts), PASSENGER)[0]
+
+    assert check(6.0, 5.8, beam=5.0).status == Status.PASS
+    finding = check(6.2, 6.5, beam=6.0)  # passes on the moulded beam, fails on the greatest breadth
+    assert finding.status == Status.FAIL and finding.gap == "0.3 m short"
+    assert check(12.0, 37.4).status == Status.PASS  # capped at 12 m
+
+
+def test_masthead_between_beam_and_cap_asks_for_greatest_breadth():
+    store = FactStore([fact("masthead_forward", "height_above_hull", 8.0, "m"), fact("ship", "beam", 7.5, "m")])
+    finding = check_masthead_height(MAST_RULE, store, PASSENGER)[0]
+    assert finding.status == Status.CANT_TELL and "greatest breadth" in finding.question
 
 
 def rules():
@@ -220,7 +257,8 @@ def rules():
 def test_scope_excludes_passenger_rules_for_the_research_vessel():
     result = run(FactStore(), rules(), PROFILES["rcrv"])
     excluded = {d.rule_id for d in result.scope if not d.applies}
-    assert excluded == {"PVAG-V404.2.3", "PVAG-V403.5.1", "PVAG-V405.2", "FSS-13-STAIR", "MSC.1-CIRC.1533"}
+    assert excluded == {"PVAG-V404.2.3", "PVAG-V403.5.1", "PVAG-V405.2", "FSS-13-STAIR", "MSC.1-CIRC.1533",
+                        "SOLAS-III-21-LIFEBOATS", "SOLAS-III-21-LIFERAFTS", "SOLAS-II-2-13.3.2.7"}
     assert not any(f.rule_id in excluded for f in result.findings)
 
 
@@ -257,9 +295,10 @@ def test_labels_name_the_rule_text_we_could_not_get():
     findings = run(FactStore(), rules(), PASSENGER).findings
     labels = {f.rule_id: f.unconfirmed_label for f in findings}
     assert labels["SOLAS-III-RAFTS"] == "Limit not yet confirmed: SOLAS III not retrieved"
-    assert labels["SOLAS-V-22"] == "Limit not yet confirmed: SOLAS V/22 not retrieved"
-    assert labels["MSC.1-CIRC.1533"] == "Limit not yet confirmed: MSC.1/Circ.1533 not retrieved"
     assert labels["COLREG-ANNEX-I"] == ""
+    # The local IMO texts hold the quotes of these rules. A fresh clone doesn't have them, and says so.
+    assert labels["SOLAS-V-22"] == ("" if HAS_IMO_TEXTS else "Limit not yet confirmed: SOLAS V/22 not retrieved")
+    assert labels["MSC.1-CIRC.1533"] == ("" if HAS_IMO_TEXTS else "Limit not yet confirmed: MSC.1/Circ.1533 not retrieved")
     text = report_text(run(FactStore(), rules(), PASSENGER))
     assert "Note: Limit not yet confirmed: SOLAS III not retrieved." in text
 
@@ -268,12 +307,15 @@ def test_stair_label_names_the_fss_code():
     part = {"name": "STAIR TREADS INTERIOR 1", "x_in": 0.0, "y_in": 0.0, "z_in": 200.0}
     findings = run(FactStore(facts_from_parts("model", [part])), rules(), PASSENGER).findings
     label = next(f.unconfirmed_label for f in findings if f.rule_id == "FSS-13-STAIR")
-    assert label == "Limit not yet confirmed: FSS Code ch. 13 not retrieved"
+    assert label == ("" if HAS_IMO_TEXTS else "Limit not yet confirmed: FSS Code ch. 13 not retrieved")
 
 
 def test_door_and_masthead_limits_are_confirmed_by_the_rule_texts():
     verified = {rule.id for rule in rules() if rule.verified}
-    assert verified == {"PVAG-V404.2.3", "PVAG-V403.5.1", "PVAG-V405.2", "COLREG-ANNEX-I"}
+    public = {"PVAG-V404.2.3", "PVAG-V403.5.1", "PVAG-V405.2", "COLREG-ANNEX-I"}
+    # The IMO excerpts are local files, kept out of the public repo. A fresh clone shows those limits as unconfirmed.
+    local = {"FSS-13-STAIR", "MSC.1-CIRC.1533", "SOLAS-V-22", "SOLAS-III-21-LIFEBOATS", "SOLAS-III-21-LIFERAFTS", "SOLAS-II-2-13.3.2.7"}
+    assert verified == (public | local if HAS_IMO_TEXTS else public)
 
 
 def test_narrow_door_to_a_stairway_is_cant_tell_under_the_exception():
@@ -341,3 +383,15 @@ def test_ramp_slope_from_rise_and_run():
 def test_ramp_slope_from_written_ratio():
     assert ramp(fact("ramp:R1", "slope_run_per_rise", 12)).status == Status.PASS
     assert ramp(fact("ramp:R1", "slope_run_per_rise", 10)).status == Status.FAIL
+def test_drawing_scale_that_disagrees_with_its_note_is_a_conflict():
+    from app.checks import check_drawing_scales
+    from app.models import Tier
+
+    def scale(prop, value, tier):
+        return Fact(subject="drawing:GA-1", property=prop, value=value, source=Source(kind=SourceKind.DOCUMENT, file="ga.pdf"),
+                    tier=tier, derivation="13 frame labels at 800 mm")
+
+    wrong = check_drawing_scales(FactStore([scale("scale_noted", 100.0, Tier.A), scale("scale_measured", 200.0, Tier.B)]))[0]
+    assert wrong.status == Status.CONFLICT and "1:100" in wrong.question and "1:200" in wrong.question
+    right = check_drawing_scales(FactStore([scale("scale_noted", 100.0, Tier.A), scale("scale_measured", 101.0, Tier.B)]))[0]
+    assert right.status == Status.PASS

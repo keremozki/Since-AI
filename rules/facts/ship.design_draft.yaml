@@ -1,0 +1,20 @@
+id: ship.design_draft
+subject: ship
+property: design_draft
+kind: length
+meaning: Design draught (draft) at the design waterline.
+labels:
+- DESIGN DRAFT
+- DESIGN DRAUGHT
+- DRAFT (DESIGN)
+- DRAUGHT, DESIGN
+- DWL
+not:
+- SCANTLING DRAFT
+- AIR DRAFT
+usually_on:
+- GA particulars
+- specification
+range:
+- 0.5
+- 30

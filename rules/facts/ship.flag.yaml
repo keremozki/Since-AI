@@ -1,0 +1,98 @@
+id: ship.flag
+subject: ship
+property: flag
+kind: text
+meaning: Flag state.
+labels:
+- FLAG
+- FLAG STATE
+- REGISTRY
+not:
+- CLASS
+usually_on:
+- specification
+# Flag states and registries a reader may accept. A value not listed is refused, never guessed; the engineer can
+# state it on the ship card instead.
+values:
+- Malta
+- Bahamas
+- Panama
+- Liberia
+- Marshall Islands
+- Bermuda
+- Cyprus
+- Greece
+- Italy
+- Finland
+- Germany
+- Norway
+- Norway (NIS)
+- Sweden
+- Denmark
+- Denmark (DIS)
+- Netherlands
+- Belgium
+- Luxembourg
+- France
+- Spain
+- Portugal
+- Portugal (Madeira)
+- Ireland
+- Iceland
+- United Kingdom
+- UK
+- Isle of Man
+- Gibraltar
+- Faroe Islands
+- Estonia
+- Latvia
+- Lithuania
+- Poland
+- Croatia
+- Turkey
+- Turkiye
+- United States
+- USA
+- US
+- Canada
+- Mexico
+- Brazil
+- Argentina
+- Chile
+- Antigua and Barbuda
+- Saint Vincent and the Grenadines
+- Barbados
+- Jamaica
+- Belize
+- Cayman Islands
+- Singapore
+- Hong Kong
+- Hong Kong, China
+- China
+- Japan
+- Republic of Korea
+- Korea
+- Taiwan
+- Philippines
+- Indonesia
+- Malaysia
+- Thailand
+- Vietnam
+- India
+- Australia
+- New Zealand
+- Cook Islands
+- Vanuatu
+- Palau
+- Tuvalu
+- Saudi Arabia
+- United Arab Emirates
+- Qatar
+- Egypt
+- South Africa
+- Nigeria
+- Kenya
+- Tanzania
+- Comoros
+- Togo
+- Sierra Leone

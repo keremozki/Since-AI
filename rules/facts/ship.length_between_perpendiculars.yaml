@@ -1,0 +1,21 @@
+id: ship.length_between_perpendiculars
+subject: ship
+property: length_between_perpendiculars
+kind: length
+meaning: Length between perpendiculars.
+labels:
+- LPP
+- LBP
+- L.B.P.
+- L.P.P.
+- LENGTH B.P.
+- LENGTH BETWEEN PERPENDICULARS
+not:
+- LOA
+- LWL
+usually_on:
+- GA particulars
+- specification
+range:
+- 5
+- 500

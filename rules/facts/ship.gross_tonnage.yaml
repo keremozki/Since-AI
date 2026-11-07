@@ -1,0 +1,23 @@
+id: ship.gross_tonnage
+subject: ship
+property: gross_tonnage
+kind: number
+meaning: Gross tonnage under the Tonnage Convention 1969.
+labels:
+- GT
+- GROSS TONNAGE
+- GROSS TON
+- TONNAGE (GT)
+not:
+- NT
+- NET TONNAGE
+- DWT
+- DEADWEIGHT
+- DISPLACEMENT
+- LIGHTSHIP
+usually_on:
+- specification
+- tonnage certificate
+range:
+- 10
+- 400000

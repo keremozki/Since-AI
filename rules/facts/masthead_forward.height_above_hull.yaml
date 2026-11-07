@@ -1,0 +1,28 @@
+id: masthead_forward.height_above_hull
+subject: masthead_forward
+property: height_above_hull
+kind: length
+meaning: Height of the forward masthead light above the uppermost continuous deck,
+  measured vertically beneath the light (COLREG Annex I 1).
+labels:
+- FORWARD MASTHEAD LIGHT
+- FWD MASTHEAD LIGHT
+- MASTHEAD LIGHT
+- MAST HEAD LIGHT
+not:
+- ABOVE BASELINE
+- ABL
+- ABOVE KEEL
+- ABOVE WATERLINE
+- ABOVE DWL
+# The after light is at least 4.5 m higher, so reading it as the forward one could pass a light that is too low.
+- AFT MASTHEAD LIGHT
+- AFTER MASTHEAD LIGHT
+- MAIN MASTHEAD LIGHT
+- SECOND MASTHEAD LIGHT
+usually_on:
+- light plan
+- mast drawing
+range:
+- 1
+- 60

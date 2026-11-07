@@ -1,4 +1,4 @@
-export type Status = "pass" | "fail" | "conflict" | "cant_tell";
+export type Status = "pass" | "fail" | "conflict" | "cant_tell" | "needs_review" | "not_applicable";
 
 export interface Point {
   x: number;
@@ -33,6 +33,51 @@ export interface Finding {
   read_quote: string;
   read_file: string;
   read_locator: string;
+  answer: string;
+  answer_key: string;
+  // Why a pass or fail was held back to "can't tell": it rests on a reading that isn't confirmed.
+  gate?: string;
+  fix?: string;
+  inputs?: FindingInput[];
+}
+
+export interface EvidenceBox {
+  page: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export interface FindingInput {
+  id: string;
+  subject: string;
+  property: string;
+  value: number | string;
+  unit: string;
+  tier: string;
+  source: string;
+  quote: string;
+  file?: string;
+  locator?: string;
+  evidence?: { file?: string; page?: number | null; box?: EvidenceBox | null };
+}
+
+export interface CardFieldInfo {
+  label: string;
+  meaning: string;
+  kind: string;
+  choices: string[];
+}
+
+export interface ShipCardView {
+  card: {
+    name: string;
+    fields: Record<string, { value: number | string | null; unit: string; source: string; tier: string; confirmed: boolean; confirmed_by: string; note: string }>;
+    suggestions: { field: string; text: string; candidate: number | string | null }[];
+  };
+  fields: Record<string, CardFieldInfo>;
+  missing: { field: string; question: string; rules: string[] }[];
 }
 
 /** accept = read correctly, reject = misread (value optional), unsure = no label. */
@@ -121,6 +166,7 @@ export interface Spend {
   spent_usd: number;
   cap_usd: number;
   calls: number;
+  ai_mode?: string;
 }
 
 export interface RecordedFact {
@@ -148,6 +194,7 @@ export interface UpdateResponse {
   inputs: Inputs;
   reply?: string;
   retrained?: boolean;
+  reading?: { status: string; notes: string[]; pending: string[]; tiers: Record<string, number> };
   cached?: boolean;
   dropped?: number;
 }
@@ -159,10 +206,17 @@ export interface MeasureTarget {
   meaning: string;
 }
 
+/** FastAPI errors carry a string, or for a waiting offline AI request an object with a message. */
+export function errorText(detail: unknown, status: number): string {
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail) return String((detail as { message: unknown }).message);
+  return `Request failed (${status})`;
+}
+
 async function parse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.detail ?? `Request failed (${response.status})`);
+    throw new Error(errorText(body?.detail, response.status));
   }
   return response.json();
 }
@@ -207,6 +261,11 @@ export const api = {
   reviewQueue: (profile: string) => fetch(`/api/review-queue/${profile}`).then((r) => parse<QueueItem[]>(r)),
   evidenceUrl: (file: string, locator: string) =>
     `/api/evidence?file=${encodeURIComponent(file)}&locator=${encodeURIComponent(locator)}`,
+  cropUrl: (file: string, page: number, box: EvidenceBox) =>
+    `/api/evidence/crop?file=${encodeURIComponent(file)}&page=${page}&x0=${box.x0}&y0=${box.y0}&x1=${box.x1}&y1=${box.y1}`,
+  shipCard: () => fetch("/api/shipcard").then((r) => parse<ShipCardView>(r)),
+  confirmCard: (body: { field: string; value: string; unit: string; by: string }) =>
+    jsonPost("/api/shipcard/confirm", body).then((r) => parse<UpdateResponse>(r)),
   reset: () => fetch("/api/reset", { method: "POST" }).then((r) => parse<{ ok: boolean }>(r)),
   inputs: () => fetch("/api/inputs").then((r) => parse<Inputs>(r)),
   removeModel: (profile: string) =>
@@ -219,10 +278,10 @@ export const api = {
       request.upload.onprogress = (event) => { if (event.lengthComputable) onUploaded(event.loaded / event.total); };
       request.onerror = () => reject(new Error("The upload failed. Is the backend running?"));
       request.onload = () => {
-        let body: { detail?: string } | null = null;
+        let body: { detail?: unknown } | null = null;
         try { body = JSON.parse(request.responseText); } catch { /* Handled below. */ }
         if (request.status >= 200 && request.status < 300 && body) resolve(body as UpdateResponse);
-        else reject(new Error(body?.detail ?? `Request failed (${request.status})`));
+        else reject(new Error(errorText(body?.detail, request.status)));
       };
       request.send(file);
     }),

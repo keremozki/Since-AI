@@ -1,7 +1,11 @@
 """Chat with the engineer. The AI explains results and records stated facts, but never decides one."""
 from __future__ import annotations
 
+import re
+
 from .llm import Claude, ModelRefused
+from .reading.parse import parse_length, parse_number
+from .units import is_length_unit, to_mm
 from .models import Fact, RunResult, Source, SourceKind, Status
 from .vocabulary import FACT_SCHEMA, to_fact, vocabulary_text
 
@@ -67,5 +71,22 @@ def respond(claude: Claude, result: RunResult, history: list[dict], message: str
         # Recording facts without the reply that states them would change results silently.
         raise ModelRefused("The AI answer was incomplete, so nothing was recorded. Ask again.")
     template = Source(kind=SourceKind.CHAT, locator="chat")
-    facts = [fact for fact in (to_fact(raw, template) for raw in raw_facts if isinstance(raw, dict)) if fact]
+    facts = [fact for fact in (to_fact(raw, template) for raw in raw_facts if isinstance(raw, dict))
+             if fact and in_engineers_words(fact, message)]
     return reply, facts, len(raw_facts) - len(facts)
+
+
+def in_engineers_words(fact: Fact, message: str) -> bool:
+    """A recorded value must be one the engineer wrote. The AI may pick it out, but never type or convert it."""
+    if isinstance(fact.value, str):
+        return fact.value.strip().lower() in message.lower()
+    if is_length_unit(fact.unit):
+        stated = [parse_length(piece) for piece in _pieces(message)]
+        return any(found and abs(to_mm(found[0], found[1]) - to_mm(float(fact.value), fact.unit)) < 0.5 for found in stated)
+    numbers = [parse_number(piece) for piece in _pieces(message)]
+    return any(n is not None and abs(n - float(fact.value)) < 1e-9 for n in numbers)
+
+
+def _pieces(message: str) -> list[str]:
+    """Every run of text that starts at a digit, so each number is parsed with the unit written after it."""
+    return [message[m.start():] for m in re.finditer(r"(?<![\d.,])\d", message)]

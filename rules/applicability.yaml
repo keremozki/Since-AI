@@ -1,0 +1,275 @@
+# Which rules apply to a hull, as data. Read by app.basis.design_basis; the conditions run in app.basis.conditions.
+#
+# Each entry: rule_id, title, clause, edition, source, verified, why, conditions, note, and status_note when the rule is
+# not in force. `why` is added to every question this entry asks, so a person sees why the answer matters.
+#
+# `verified: true` only where the research notes quote the primary text of the clause word for word. A paraphrase in the
+# notes, or a gap the notes name, leaves it false. Notes: research_notes/Ship design file reading methods/rule_fact_definitions.md
+# (sections 1-7) and research_notes/Product direction and hackathon strategy/ (directions_part2.md, rules_feasibility_and_legal.md).
+#
+# Conditions: {field, op, value, clause, ask}; groups {any_of: [...]} and {all_of: [...]}; a plain list is all_of.
+# ops: == != < <= > >= in not_in exists on_or_after before. `constructed` means keel_date (the keel laid or a similar stage).
+# {manual: "question", needs: "what is missing"} is an input the card can't hold: always "can't tell" until a person answers.
+# Dates are YYYY-MM-DD. A missing input is never assumed: it gives "can't tell" and the question.
+
+entries:
+
+  - rule_id: SOLAS-V-22
+    title: Bridge visibility
+    clause: SOLAS V/22.1, V/22.1.1 (length per V/2.4)
+    edition: SOLAS V as amended by MSC.142(77), in force 2006-07-01 (the MSC.99(73) text used 45 m and the Load Line length)
+    source: IMO Res. MSC.142(77) and MSC.99(73), as quoted in rule_fact_definitions.md section 4
+    verified: true
+    why: SOLAS V/22.1 sets bridge visibility requirements for ships of 55 m or more in length overall constructed on or after 1 July 1998.
+    conditions:
+      - {field: length_overall_m, op: ">=", value: 55, clause: "SOLAS V/2.4, V/22.1", ask: "What is the ship's length overall?"}
+      - {field: constructed, op: on_or_after, value: "1998-07-01", clause: "SOLAS V/22.1", ask: "What is the keel-laying date?"}
+    note: >-
+      Length is length overall (V/2.4), never the Load Line length or LBP. Ships constructed before 1 July 1998 are outside
+      V/22.1 but V/22.2 asks them to meet 22.1.1 and 22.1.2 where practicable; that is not modelled here. V/1.4 lets the
+      Administration exempt ships below 150 GT, or below 500 GT not on international voyages; also not modelled. Only the
+      22.1.1 forward blind zone limit is computed. Interpretation of V/22.1.6 for ships contracted on or after 2011-01-01 is in
+      amendments.yaml.
+
+  - rule_id: COLREG-ANNEX-I
+    title: Masthead light height
+    clause: COLREG Annex I 2(a)(i); length and breadth per Rule 3(j)
+    edition: COLREG 1972 as made (UK SI 1989/1798 text); later IMO amendments to Annex I not compared
+    source: UK SI 1989/1798 Annex I para 2, as quoted in rule_fact_definitions.md section 5
+    verified: true
+    why: COLREG Annex I 2(a) sets the forward masthead light height for power-driven vessels of 20 m or more in length.
+    conditions:
+      - {field: propulsion, op: "==", value: power_driven, clause: "COLREG Annex I 2(a)", ask: "Is the ship power-driven or a sailing vessel?"}
+      - {field: length_overall_m, op: ">=", value: 20, clause: "COLREG Annex I 2(a); Rule 3(j)", ask: "What is the ship's length overall?"}
+    note: >-
+      No construction-date trigger: COLREG Rule 1(a) applies to all vessels. Length is length overall and breadth is
+      greatest breadth (Rule 3(j)). Vessels of 12 m to under 20 m (Annex I 2(c)) are not covered here.
+
+  - rule_id: FSS-13-STAIR
+    title: Escape stair clear width
+    clause: FSS Code ch. 13, 2.1.1 (via SOLAS II-2/13.3.2.4.5)
+    edition: FSS Code (MSC.98(73)) original 2000 text; later amendments to ch. 13 not retrieved
+    source: IMO Res. MSC.98(73) and MSC.99(73), as quoted in rule_fact_definitions.md section 6
+    verified: true
+    why: FSS Code chapter 13 sets a minimum clear width for escape stairs on passenger ships constructed on or after 1 July 2002.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger, special_purpose], clause: "FSS Code ch. 13 section 2 (passenger ships)", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - any_of:
+          - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "FSS Code ch. 13 section 2"}
+          - all_of:
+              - {field: ship_type, op: "==", value: special_purpose, clause: "SPS Code 6.1-6.3"}
+              - {field: persons_on_board, op: ">", value: 60, clause: "SPS Code 6.1-6.3", ask: "How many persons on board is the ship certified to carry?"}
+              - manual: "Which SOLAS II-2 requirement set does the Administration apply to this special purpose ship?"
+                needs: "II-2 requirement set for the special purpose ship"
+                clause: "SPS Code 6.1-6.3"
+                why: "SPS Code 6.1-6.3 route fire protection by persons on board, and which stair width rule follows for 61 to 240 persons is not settled."
+      - {field: constructed, op: on_or_after, value: "2002-07-01", clause: "SOLAS II-2/1.2 (as adopted in MSC.99(73))", ask: "What is the keel-laying date?"}
+    note: >-
+      The number is a minimum per stair (2.1.1). Clear width is between handrails. A stair must not get narrower toward the
+      assembly station (2.1.3). Cargo ships, and special purpose ships with 60 persons or fewer, follow FSS 13 section 3
+      (700 mm) instead. The SPS Code routing for 61 to 240 persons is an inference in the research notes, not a quoted rule.
+
+  - rule_id: MSC.1-CIRC.1533
+    title: Evacuation time
+    clause: MSC.1/Circ.1533 annex 1 sections 5.1-5.2; applicability per SOLAS II-2/13.3.2.7
+    edition: MSC.1/Circ.1533 (6 June 2016), which supersedes MSC.1/Circ.1238
+    source: MSC.1/Circ.1533 as summarised in rule_fact_definitions.md section 6 (performance standard paraphrased, not quoted)
+    verified: true  # annex 1 5.1-5.2 quoted in docs/rules/imo/msc1-circ1533.md
+    why: SOLAS II-2/13.3.2.7 requires an evacuation analysis, judged against MSC.1/Circ.1533, for passenger ships constructed on or after 1 January 2020 carrying more than 36 passengers, and for ro-ro passenger ships constructed on or after 1 July 1999.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "SOLAS II-2/13.3.2.7", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - any_of:
+          - all_of:
+              - {field: ship_type, op: "==", value: passenger, clause: "SOLAS II-2/13.3.2.7.1.2"}
+              - {field: constructed, op: on_or_after, value: "2020-01-01", clause: "SOLAS II-2/13.3.2.7.1.2", ask: "What is the keel-laying date?"}
+              - {field: passengers, op: ">", value: 36, clause: "SOLAS II-2/13.3.2.7.1.2", ask: "How many passengers is the ship certified to carry?"}
+          - all_of:
+              - {field: ship_type, op: "==", value: ro_ro_passenger, clause: "SOLAS II-2/13.3.2.7.1.1"}
+              - {field: constructed, op: on_or_after, value: "1999-07-01", clause: "SOLAS II-2/13.3.2.7.1.1", ask: "What is the keel-laying date?"}
+    note: >-
+      Limit n in 1.25(R+T) + 2/3(E+L) <= n, with (E+L) <= 30 min: 60 min for ro-ro passenger ships; for other passenger ships 60
+      min with no more than three main vertical zones and 80 min with more than three. The research notes paraphrase this
+      standard, so it is not marked verified. Applicability uses the SOLAS "constructed" date, not the contract or delivery date.
+
+  - rule_id: SOLAS-II-2-13.3.2.7
+    title: Evacuation analysis required
+    clause: SOLAS II-2/13.3.2.7.1
+    edition: SOLAS II-2/13.3.2.7 as amended by MSC.404(96), in force 2020-01-01
+    source: IMO Res. MSC.404(96), as quoted in rule_fact_definitions.md section 6
+    verified: true
+    why: SOLAS II-2/13.3.2.7 requires an evacuation analysis for passenger ships constructed on or after 1 January 2020 carrying more than 36 passengers, and for ro-ro passenger ships constructed on or after 1 July 1999.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "SOLAS II-2/13.3.2.7", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - any_of:
+          - all_of:
+              - {field: ship_type, op: "==", value: passenger, clause: "SOLAS II-2/13.3.2.7.1.2"}
+              - {field: constructed, op: on_or_after, value: "2020-01-01", clause: "SOLAS II-2/13.3.2.7.1.2", ask: "What is the keel-laying date?", why: "SOLAS II-2/13.3.2.7 requires an evacuation analysis for passenger ships constructed on or after 1 January 2020."}
+              - {field: passengers, op: ">", value: 36, clause: "SOLAS II-2/13.3.2.7.1.2", ask: "How many passengers is the ship certified to carry?"}
+          - all_of:
+              - {field: ship_type, op: "==", value: ro_ro_passenger, clause: "SOLAS II-2/13.3.2.7.1.1"}
+              - {field: constructed, op: on_or_after, value: "1999-07-01", clause: "SOLAS II-2/13.3.2.7.1.1", ask: "What is the keel-laying date?", why: "SOLAS II-2/13.3.2.7 requires an evacuation analysis for ro-ro passenger ships constructed on or after 1 July 1999."}
+    note: >-
+      "Constructed" is the keel-laying date or a similar stage of construction, not the contract or delivery date: a ship
+      contracted before 2020 but keel-laid after is covered. The threshold counts passengers (more than 36), not total persons.
+
+  - rule_id: SOLAS-III-RAFTS
+    title: Survival craft capacity (liferafts)
+    clause: SOLAS III/31.1.1.2 (cargo ships), SPS Code 8.4
+    edition: SOLAS III as adopted in MSC.47(66) (1996) with MSC.216(82) changes; later amendments not checked
+    source: IMO Res. MSC.47(66), MSC.216(82) and MSC.266(84), as quoted in rule_fact_definitions.md section 3
+    verified: false  # regulation III/31 isn't in docs/rules yet, so this can't be traced to its text
+    why: SOLAS chapter III sets liferaft capacity as a share of the persons on board, and the share depends on the ship type and, for special purpose ships, on whether more than 60 persons are on board.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger, cargo, special_purpose], clause: "SOLAS III/21, III/31; SPS Code 8", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+    note: >-
+      The share depends on the regime. Passenger ships on international voyages that are not short: liferafts for 25%
+      of persons on board in total (III/21.1.1.2). Cargo ships, and special purpose ships with 60 persons or fewer: liferafts for
+      100% of persons on board (III/31.1.1.2), and for 100% on each side when the rafts are over 185 kg or not stowed for easy
+      side-to-side transfer. Special purpose ships with more than 60 persons follow the passenger-ship rule (SPS Code 8.2).
+      Short international and domestic voyages are not modelled, so they give "can't tell".
+
+  - rule_id: SOLAS-III-21-LIFEBOATS
+    title: Lifeboat capacity each side (passenger ships)
+    clause: SOLAS III/21.1.1.1; special purpose ships per SPS Code 8.2
+    edition: SOLAS III/21.1.1 as adopted in MSC.47(66) (1996, in force 1998-07-01); later amendments not checked
+    source: IMO Res. MSC.47(66), as quoted in rule_fact_definitions.md section 3
+    verified: true
+    why: SOLAS III/21.1.1 requires passenger ships on international voyages that are not short to carry lifeboats on each side for at least 50% of the persons on board.
+    conditions:
+      - any_of:
+          - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "SOLAS III/21.1.1", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+          - all_of:
+              - {field: ship_type, op: "==", value: special_purpose, clause: "SPS Code 8.2"}
+              - {field: persons_on_board, op: ">", value: 60, clause: "SPS Code 8.2", ask: "How many persons on board is the ship certified to carry?"}
+      - {field: voyage, op: "==", value: international, clause: "SOLAS III/21.1.1", ask: "Does the ship make international voyages that are not short, short international voyages, or domestic voyages?"}
+    note: >-
+      Persons on board is the certified total (passengers or special personnel, plus crew), not the passenger count. The
+      Administration may permit liferafts to replace lifeboats, but never below lifeboats for 37.5% of persons on board on each
+      side; that is a flag decision and is not assumed. Short international voyages (III/21.1.2: 30%) are not modelled. Cargo ships
+      carry lifeboats for 100% on each side (III/31.1.1.1), which is a different rule.
+
+  - rule_id: SOLAS-III-21-LIFERAFTS
+    title: Liferaft capacity in total (passenger ships)
+    clause: SOLAS III/21.1.1.2; special purpose ships per SPS Code 8.2
+    edition: SOLAS III/21.1.1 as adopted in MSC.47(66) (1996, in force 1998-07-01); later amendments not checked
+    source: IMO Res. MSC.47(66), as quoted in rule_fact_definitions.md section 3
+    verified: true
+    why: SOLAS III/21.1.1.2 requires passenger ships on international voyages that are not short to carry liferafts in addition to the lifeboats, for at least 25% of the persons on board.
+    conditions:
+      - any_of:
+          - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "SOLAS III/21.1.1", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+          - all_of:
+              - {field: ship_type, op: "==", value: special_purpose, clause: "SPS Code 8.2"}
+              - {field: persons_on_board, op: ">", value: 60, clause: "SPS Code 8.2", ask: "How many persons on board is the ship certified to carry?"}
+      - {field: voyage, op: "==", value: international, clause: "SOLAS III/21.1.1", ask: "Does the ship make international voyages that are not short, short international voyages, or domestic voyages?"}
+    note: >-
+      The 25% is the aggregate capacity of all liferafts, in addition to the lifeboats. These liferafts must be served by at
+      least one launching appliance on each side (III/21.1.1.2). Short international voyages (III/21.1.2) are not modelled.
+
+  - rule_id: SPS-CODE-8.2
+    title: Special purpose ship with more than 60 persons follows passenger-ship lifesaving
+    clause: 'SPS Code 8.2 (and 8.6, which reads "passenger" as "special personnel")'
+    edition: SPS Code 2008 (Res. MSC.266(84))
+    source: IMO Res. MSC.266(84), as quoted in rule_fact_definitions.md section 3
+    verified: true
+    why: SPS Code 8.2 makes a special purpose ship carrying more than 60 persons on board follow SOLAS chapter III for passenger ships on international voyages that are not short.
+    conditions:
+      - {field: ship_type, op: "==", value: special_purpose, clause: "SPS Code 8.2", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - {field: persons_on_board, op: ">", value: 60, clause: "SPS Code 8.2", ask: "How many persons on board is the ship certified to carry?"}
+    note: >-
+      The 60 counts total persons on board, not special personnel and not the SOLAS passenger count. With 60 or fewer persons,
+      SPS Code 8.4 sends the ship to the SOLAS III cargo-ship rules. SPS Code 1.2.1 applies the Code to ships certified on or
+      after 13 May 2008 (the Administration may apply it to others); the certification date is not modelled. Exactly 240 persons
+      is inconsistent between SPS paragraphs (2.2.1 and others): flag it to a person.
+
+  - rule_id: SPS-CODE-1.3.12
+    title: Special purpose ship status
+    clause: SPS Code Preamble 3 and 1.3.11-1.3.12
+    edition: SPS Code 2008 (Res. MSC.266(84))
+    source: IMO Res. MSC.266(84), as quoted in rule_fact_definitions.md section 3
+    verified: true
+    why: Under the SPS Code a special purpose ship is a mechanically self-propelled ship of at least 500 gross tonnage that carries more than 12 special personnel.
+    conditions:
+      - {field: ship_type, op: "==", value: special_purpose, clause: "SPS Code 1.3.12", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - {field: special_personnel, op: ">", value: 12, clause: "SPS Code 1.3.12", ask: "How many special personnel (scientists, technicians) does the ship carry?"}
+      - {field: gross_tonnage, op: ">=", value: 500, clause: "SPS Code Preamble 3", ask: "What is the ship's gross tonnage?"}
+    note: >-
+      A ship carrying more than 12 passengers as SOLAS defines them is a passenger ship, not a special purpose ship. Special
+      personnel counts people carried because of the ship's special purpose; it is not the science berth count.
+
+  - rule_id: PVAG-V404.2.3
+    title: Accessible door clear width
+    clause: PVAG V404.2.3 (proposed), scope per V201.1.1
+    edition: PVAG NPRM, 78 FR 38102 (25 June 2013), 36 CFR Part 1196; no final rule found through 2026-11-07
+    source: 78 FR 38102 (Federal Register 2013-14367), as quoted in rule_fact_definitions.md section 2
+    verified: true
+    why: The proposed PVAG covers passenger vessels permitted to carry more than 150 passengers or more than 49 overnight passengers.
+    status_note: >-
+      PROPOSED rule, not in force. Owners and operators need not comply until DOT and DOJ adopt it as standards. Use the numbers
+      as a design benchmark unless the owner's compliance basis names PVAG.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "PVAG V201.1.1", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - any_of:
+          - {field: passengers, op: ">", value: 150, clause: "PVAG V201.1.1", ask: "How many passengers is the vessel permitted to carry?"}
+          - {field: overnight_passengers, op: ">", value: 49, clause: "PVAG V201.1.1", ask: "How many overnight passengers is the vessel permitted to carry?"}
+    note: >-
+      Scope text is from the NPRM summary (passenger vessels other than ferries and tenders, more than 150 passengers or more
+      than 49 overnight passengers). Ferries with more than 99 passengers and tenders with more than 59 have lower limits and are
+      not modelled. Exception 3: the clear width of doors to stairways may follow the administrative authority instead.
+
+  - rule_id: PVAG-V403.5.1
+    title: Walking surface clear width
+    clause: PVAG V403.5.1 (proposed), scope per V201.1.1
+    edition: PVAG NPRM, 78 FR 38102 (25 June 2013), 36 CFR Part 1196; no final rule found through 2026-11-07
+    source: 78 FR 38102 (Federal Register 2013-14367), as quoted in rule_fact_definitions.md section 2
+    verified: true
+    why: The proposed PVAG covers passenger vessels permitted to carry more than 150 passengers or more than 49 overnight passengers.
+    status_note: >-
+      PROPOSED rule, not in force. Owners and operators need not comply until DOT and DOJ adopt it as standards. Use the numbers
+      as a design benchmark unless the owner's compliance basis names PVAG.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "PVAG V201.1.1", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - any_of:
+          - {field: passengers, op: ">", value: 150, clause: "PVAG V201.1.1", ask: "How many passengers is the vessel permitted to carry?"}
+          - {field: overnight_passengers, op: ">", value: 49, clause: "PVAG V201.1.1", ask: "How many overnight passengers is the vessel permitted to carry?"}
+    note: >-
+      Scope text is from the NPRM summary (passenger vessels other than ferries and tenders, more than 150 passengers or more
+      than 49 overnight passengers). Ferries with more than 99 passengers and tenders with more than 59 have lower limits and are
+      not modelled. Exception 3: the clear width of doors to stairways may follow the administrative authority instead.
+
+  - rule_id: PVAG-V405.2
+    title: Ramp running slope
+    clause: PVAG V405.2 (proposed), scope per V201.1.1
+    edition: PVAG NPRM, 78 FR 38102 (25 June 2013), 36 CFR Part 1196; no final rule found through 2026-11-07
+    source: 78 FR 38102 (Federal Register 2013-14367), as quoted in rule_fact_definitions.md section 2
+    verified: true
+    why: The proposed PVAG covers passenger vessels permitted to carry more than 150 passengers or more than 49 overnight passengers.
+    status_note: >-
+      PROPOSED rule, not in force. Owners and operators need not comply until DOT and DOJ adopt it as standards. Use the numbers
+      as a design benchmark unless the owner's compliance basis names PVAG.
+    conditions:
+      - {field: ship_type, op: in, value: [passenger, ro_ro_passenger], clause: "PVAG V201.1.1", ask: "What is the SOLAS ship type: passenger, ro-ro passenger, cargo or special purpose?"}
+      - any_of:
+          - {field: passengers, op: ">", value: 150, clause: "PVAG V201.1.1", ask: "How many passengers is the vessel permitted to carry?"}
+          - {field: overnight_passengers, op: ">", value: 49, clause: "PVAG V201.1.1", ask: "How many overnight passengers is the vessel permitted to carry?"}
+    note: >-
+      Scope text is from the NPRM summary (passenger vessels other than ferries and tenders, more than 150 passengers or more
+      than 49 overnight passengers). Ferries with more than 99 passengers and tenders with more than 59 have lower limits and are
+      not modelled. Exception 3: the clear width of doors to stairways may follow the administrative authority instead.
+
+  - rule_id: ADA-404.2.3
+    title: Door clear width (2010 ADA Standards)
+    clause: 2010 ADA Standards 404.2.3
+    edition: 2010 ADA Standards for Accessible Design
+    source: 2010 ADA Standards (Access Board PDF) and 28 CFR 36.406, as quoted in rule_fact_definitions.md section 1
+    verified: true
+    why: The 2010 ADA Standards are written for buildings and sites, so their door width is only a design benchmark on a ship unless the owner's compliance basis names them.
+    status_note: >-
+      Benchmark only unless the compliance basis names it: the Standards cover fixed elements of buildings, structures and sites
+      (28 CFR 36.406(b)), and gangways that connect to vessels are not addressed (106.5). ADA Title III can reach a foreign-flag
+      cruise ship in U.S. waters except for its internal affairs (Spector, 2005; read from summaries only).
+    conditions:
+      - {field: ada_2010_named, op: "==", value: "yes", clause: "28 CFR 36.406(b)", ask: "Does the owner's compliance basis name the 2010 ADA Standards (404.2.3) for this ship?"}
+    note: >-
+      Clear width is measured between the face of the door and the stop with the door open 90 degrees; it is not the leaf, frame
+      or nominal door width. The 36 in (915 mm) figure applies to openings more than 24 in (610 mm) deep.

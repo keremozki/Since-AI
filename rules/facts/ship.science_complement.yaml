@@ -1,0 +1,16 @@
+id: ship.science_complement
+subject: ship
+property: science_complement
+kind: number
+meaning: Number of scientists and marine technicians, as stated.
+labels:
+- SCIENCE
+- SCIENTISTS
+- SCIENCE PARTY
+not:
+- SCIENCE BERTHS
+usually_on:
+- specification
+range:
+- 0
+- 500

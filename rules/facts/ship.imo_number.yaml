@@ -1,0 +1,16 @@
+id: ship.imo_number
+subject: ship
+property: imo_number
+kind: text
+meaning: IMO number. Placeholders such as 1234567 are rejected.
+labels:
+- IMO
+- IMO NO
+- IMO NUMBER
+not: []
+usually_on:
+- specification
+placeholders:
+- '1234567'
+- '0000000'
+- XXXXXXX

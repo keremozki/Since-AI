@@ -1,0 +1,10 @@
+id: evacuation.analysis_present
+subject: evacuation
+property: analysis_present
+kind: text
+meaning: An evacuation analysis document is in the package (SOLAS II-2/13.3.2.7).
+labels:
+- EVACUATION ANALYSIS
+not: []
+usually_on:
+- evacuation analysis report

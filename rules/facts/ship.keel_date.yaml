@@ -1,0 +1,16 @@
+id: ship.keel_date
+subject: ship
+property: keel_date
+kind: date
+meaning: Date the keel was laid or the ship was at a similar stage of construction
+  (SOLAS 'constructed').
+labels:
+- KEEL LAID
+- KEEL LAYING
+- KEEL-LAYING DATE
+not:
+- CONTRACT DATE
+- DELIVERY
+usually_on:
+- specification
+- build records

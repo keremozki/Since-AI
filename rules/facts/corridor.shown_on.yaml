@@ -1,0 +1,9 @@
+id: corridor.shown_on
+subject: corridor:.+
+property: shown_on
+kind: text
+meaning: The sheet or page where a corridor is labelled, when no usable width is written
+  for it.
+ai_pointing: false
+used_by:
+- PVAG V403.5.1

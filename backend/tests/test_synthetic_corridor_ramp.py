@@ -14,6 +14,9 @@ sys.path.insert(0, str(ROOT / "tools"))
 import synthetic_corridor_ramp as gen  # noqa: E402
 from validate_data import compare_facts, compare_results  # noqa: E402
 
+from app.models import Tier  # noqa: E402
+from app.reading.code_reader import extra_facts  # noqa: E402
+
 from app.checks import check_corridor_width, check_ramp_slope  # noqa: E402
 from app.drawing import read_pdf  # noqa: E402
 from app.models import Fact, Rule, ShipProfile, Source, SourceKind, Status  # noqa: E402
@@ -87,8 +90,11 @@ def test_committed_sets_validate_with_no_false_pass(folder):
         read = read_pdf(truth_path.with_name(truth["file"]).read_bytes(), truth["file"])
         facts = compare_facts([f.model_dump(mode="json") for f in read.facts], truth["facts"], [])
         assert facts["wrong_or_extra"] == [] and facts["missed"] == [], truth["file"]
-        tally = compare_results(read.facts, truth, rules)["tally"]
+        trusted = [f.model_copy(update={"tier": Tier.B}) for f in read.facts]
+        tally = compare_results(trusted, truth, rules)["tally"]
         assert tally.get("FALSE_PASS", 0) == 0 and tally.get("mismatch", 0) == 0, truth["file"]
+        graded = extra_facts(truth["file"], truth_path.with_name(truth["file"]).read_bytes(), None, [])
+        assert compare_results(graded, truth, rules)["tally"].get("FALSE_PASS", 0) == 0, truth["file"]
 
 
 def page_pdf(*items):

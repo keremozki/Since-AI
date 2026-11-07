@@ -1,0 +1,20 @@
+id: stair.persons_served
+subject: stair:[\w.-]+
+property: persons_served
+kind: number
+meaning: Persons the stairway is designed to serve, from the means of escape calculation
+  (FSS Code ch. 13, 2.1.1 - two thirds of the crew and the total number of passengers in the areas served).
+labels:
+- PERSONS SERVED
+- PERSON LOAD
+- DESIGN PERSONS
+not:
+- PERSONS ON BOARD
+- TOTAL PERSONS
+- BERTHS
+usually_on:
+- escape plan
+- means of escape calculation
+range:
+- 0
+- 5000

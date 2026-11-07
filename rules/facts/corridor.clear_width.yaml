@@ -1,0 +1,13 @@
+id: corridor.clear_width
+subject: corridor:.+
+property: clear_width
+kind: length
+meaning: Clear width of a corridor or walking surface, by its label on the drawing
+  (PVAG V403.5.1).
+ai_pointing: false
+range:
+- 300
+- 5000
+unit_hint: mm
+used_by:
+- PVAG V403.5.1

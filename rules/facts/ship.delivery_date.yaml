@@ -1,0 +1,13 @@
+id: ship.delivery_date
+subject: ship
+property: delivery_date
+kind: date
+meaning: Delivery date.
+labels:
+- DELIVERY
+- DELIVERY DATE
+- DATE OF DELIVERY
+not:
+- CONTRACT DATE
+usually_on:
+- specification

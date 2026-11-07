@@ -1,0 +1,19 @@
+id: evacuation.time_minutes
+subject: evacuation
+property: time_minutes
+kind: number
+meaning: Calculated total evacuation duration of the governing case, 1.25(R+T) + 2/3(E+L), in minutes (MSC.1/Circ.1533 5.1).
+labels:
+- EVACUATION TIME
+- TOTAL EVACUATION TIME
+- 1.25(R+T)+2/3(E+L)
+not:
+- R+T+E+L
+- TRAVEL TIME
+- RESPONSE TIME
+- E+L
+usually_on:
+- evacuation analysis
+range:
+- 1
+- 300

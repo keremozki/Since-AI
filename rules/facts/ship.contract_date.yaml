@@ -1,0 +1,12 @@
+id: ship.contract_date
+subject: ship
+property: contract_date
+kind: date
+meaning: Date the building contract was placed.
+labels:
+- CONTRACT DATE
+- DATE OF CONTRACT
+- CONTRACT SIGNED
+not: []
+usually_on:
+- specification

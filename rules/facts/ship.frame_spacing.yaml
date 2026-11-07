@@ -1,0 +1,16 @@
+id: ship.frame_spacing
+subject: ship
+property: frame_spacing
+kind: length
+meaning: Frame spacing, used to check a drawing's scale.
+labels:
+- FRAME SPACING
+- FR. SPACING
+- FRAME SPACE
+not: []
+usually_on:
+- specification
+- GA
+range:
+- 0.2
+- 3

@@ -4,12 +4,13 @@ import pytest
 from app.chat import HISTORY_TURNS, respond, results_context
 from app.engine import run
 from app.llm import ModelRefused
-from app.models import Fact, Rule, ShipProfile, Source, SourceKind
+from app.models import Fact, Rule, ShipProfile, Source, SourceKind, Tier
 from app.store import FactStore
 
 DOOR = Rule(id="D", title="Door clear width", area="A", source="PVAG V404.2.3", check="door_clear_width",
             params={"min_in": 32, "min_mm": 815})
-PASSENGER = ShipProfile(id="p", name="Test ship", ship_type="passenger", passengers=400)
+PASSENGER = ShipProfile(id="p", name="Test ship", ship_type="passenger", passengers=400,
+                        accessible_route_all_passage_doors=True, approved_assumptions=["openings_not_deep"])
 
 
 class Fake:
@@ -27,7 +28,7 @@ def result(*facts):
 
 def width(number, value):
     return Fact(subject=f"door-number:{number}", property="clear_width", value=value, unit="in",
-                source=Source(kind=SourceKind.DOCUMENT, file="plan.pdf"))
+                source=Source(kind=SourceKind.DOCUMENT, file="plan.pdf"), tier=Tier.A)
 
 
 def raw(subject, prop, number, unit="in"):

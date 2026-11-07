@@ -1,0 +1,33 @@
+id: ship.length_overall
+subject: ship
+property: length_overall
+kind: length
+meaning: Length overall of the ship, extreme.
+labels:
+- LOA
+- L.O.A.
+- LENGTH OVERALL
+- LENGTH O.A.
+- LENGTH OA
+- LENGTH, OVERALL
+not:
+- LWL
+- LPP
+- LBP
+- LOAD LINE LENGTH
+- SIDE DECK LENGTH
+- LENGTH WATERLINE
+usually_on:
+- GA particulars
+- specification
+- capacity plan
+range:
+- 5
+- 500
+used_by:
+- COLREG Rule 3(j)
+- SOLAS V/2.4 and V/22.1
+# A parenthesis may say this much without changing the quantity: "299.80 m (extreme)".
+qualifiers:
+- EXTREME
+- OVERALL

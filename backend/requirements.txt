@@ -7,5 +7,15 @@ pymupdf>=1.24
 python-multipart>=0.0.9
 pytest>=8
 httpx>=0.27
-numpy>=1.26
+# Confidence model.
 scikit-learn>=1.5
+# Reading pipeline: OCR, schedules, IFC models, images. The OCR package needs Python 3.12 or older.
+rapidocr-onnxruntime>=1.4
+onnxruntime>=1.17
+opencv-python-headless>=4.9
+numpy>=1.26
+pillow>=10
+openpyxl>=3.1
+ifcopenshell>=0.8
+# Only for regenerating the synthetic test package and its tests.
+Hershey-Fonts>=2

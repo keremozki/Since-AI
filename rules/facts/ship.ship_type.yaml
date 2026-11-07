@@ -1,0 +1,12 @@
+id: ship.ship_type
+subject: ship
+property: ship_type
+kind: text
+meaning: 'Ship type for rule scope: passenger, cargo, special purpose, ro-ro passenger.'
+labels:
+- SHIP TYPE
+- TYPE OF SHIP
+- VESSEL TYPE
+not: []
+usually_on:
+- specification

@@ -1,0 +1,20 @@
+id: stair.clear_width
+subject: stair:[\w.-]+
+property: clear_width
+kind: length
+meaning: Clear width of the stairway, measured off the handrails (FSS Code ch. 13;
+  MSC.1/Circ.1533 annex 2, 1.1).
+labels:
+- CLEAR WIDTH
+- STAIR WIDTH
+- CLEAR STAIR WIDTH
+not:
+- TREAD LENGTH
+- STRINGER TO STRINGER
+usually_on:
+- GA
+- stair schedule
+- escape plan
+range:
+- 300
+- 6000

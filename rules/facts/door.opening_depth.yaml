@@ -1,0 +1,15 @@
+id: door.opening_depth
+subject: door-number:[\w.-]+
+property: opening_depth
+kind: length
+meaning: 'Depth of the door opening (ADA 404.2.3: over 610 mm needs 915 mm clear).'
+labels:
+- OPENING DEPTH
+- DEPTH OF OPENING
+- WALL DEPTH
+not: []
+usually_on:
+- door schedule
+range:
+- 10
+- 3000

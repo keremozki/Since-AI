@@ -1,0 +1,26 @@
+id: ship.persons_on_board
+subject: ship
+property: persons_on_board
+kind: number
+meaning: Total number of persons the ship is certified to carry (passengers, special
+  personnel, and crew), as stated. Never a berth count.
+labels:
+- PERSONS ON BOARD
+- TOTAL PERSONS ON BOARD
+- POB
+- TOTAL PERSONS
+- CERTIFIED PERSONS
+- PERSONS (TOTAL)
+not:
+- BERTHS
+- S/R
+- STATEROOMS
+- CABINS
+- ACCOMMODATION FOR
+usually_on:
+- specification
+- LSA plan
+- safety plan
+range:
+- 1
+- 12000

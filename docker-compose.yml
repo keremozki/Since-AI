@@ -1,0 +1,14 @@
+# docker compose up --build, then open http://localhost:8000
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AI_MODE: ${AI_MODE:-offline}
+    volumes:
+      # Confidential ship files, recorded AI answers, and the scoreboard stay on the host.
+      - ./ship-data:/app/ship-data

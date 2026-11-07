@@ -61,7 +61,8 @@ _TO_MM = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4, "ft": 304.8}
 
 def extraction_confidence(finding: Finding) -> float:
     facts = finding.evidence.facts if finding.evidence else []
-    return min((CONFIDENCE_SCORE.get(f.confidence, 0.4) for f in facts), default=0.4)
+    # An engineer who confirmed a reading settled the doubt about it.
+    return min((CONFIDENCE_SCORE["high"] if f.confirmed_by else CONFIDENCE_SCORE.get(f.confidence, 0.4) for f in facts), default=0.4)
 
 
 def _agrees(a: Fact, b: Fact) -> bool:
@@ -178,6 +179,21 @@ def make_label(finding: Finding, store: FactStore, decision: str, *, synthetic: 
         "note": note, "reviewer": reviewer, "synthetic": synthetic,
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def plain_answer(finding: Finding, decision: str, read: dict | None, *, corrected_value: float | None = None,
+                 corrected_unit: str = "", note: str = "", reviewer: str = "") -> dict:
+    """An answer about a reading that isn't a fail, like a held-back pass. Saved and undoable, but never trained on."""
+    if decision not in DECISIONS:
+        raise ValueError(f"Unknown decision: {decision}. Use accept, reject, or unsure.")
+    if corrected_value is not None and decision != "reject":
+        raise ValueError("Only a misread can carry a corrected value.")
+    if corrected_value is not None and not corrected_unit:
+        raise ValueError("Give the unit of the corrected value.")
+    return {"key": review_key(finding), "label": None, "decision": decision, "features": {}, "rule_id": finding.rule_id,
+            "subject": finding.subject, "measured": finding.measured, "corrected_value": corrected_value,
+            "corrected_unit": corrected_unit, "read": read, "note": note, "reviewer": reviewer, "synthetic": False,
+            "created": datetime.now(timezone.utc).isoformat(timespec="seconds")}
 
 
 # ---------- model ----------
@@ -354,6 +370,9 @@ class ConfidenceGate:
         for finding in findings:
             if not finding.reviewable or review_key(finding) in reviewed:
                 continue
+            if finding.evidence is None or not finding.evidence.facts or finding.evidence.limit == 0:
+                queue.append((finding, 0.0, "rests on a reading that isn't confirmed"))
+                continue
             row = features(finding, store)
             if finding.p_real is not None:
                 queue.append((finding, abs(finding.p_real - 0.5), f"model unsure: P(real) = {finding.p_real:.2f}"))
@@ -377,7 +396,7 @@ class ConfidenceGate:
             "labels_total": len(rows), "labels_synthetic": sum(bool(r.get("synthetic")) for r in rows),
             "labels_used": len(used), "allow_synthetic": self.allow_synthetic,
             "labels_read_correctly": sum(r["label"] == 1 for r in used), "labels_misread": sum(r["label"] == 0 for r in used),
-            "labels_unsure": sum(r.get("label") is None for r in rows),
+            "labels_unsure": sum(r.get("decision") == "unsure" for r in rows),
             "labels_until_model": max(0, self.min_labels - len(used)) if self.model is None else 0,
             "recent": [{k: r.get(k) for k in ("key", "decision", "subject", "measured", "corrected_value",
                                               "corrected_unit", "reviewer", "created", "synthetic")}

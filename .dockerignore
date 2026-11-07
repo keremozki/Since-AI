@@ -1,0 +1,8 @@
+.venv
+**/node_modules
+frontend/dist
+ship-data
+**/__pycache__
+.env
+*.nwd
+.git

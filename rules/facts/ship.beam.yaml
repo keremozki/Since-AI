@@ -1,0 +1,29 @@
+id: ship.beam
+subject: ship
+property: beam
+kind: length
+meaning: Moulded beam at the main deck.
+labels:
+- BEAM
+- BREADTH
+- B
+- BREADTH MOULDED
+- MOULDED BREADTH
+- BEAM (MLD)
+- BEAM MLD
+not:
+- BEAM OVERALL
+- BREADTH OVERALL
+- BEAM (EXTREME)
+- BEAM, MAX
+- BREADTH, EXTREME
+- BREADTH EXTREME
+- MAXIMUM BREADTH
+- GREATEST BREADTH
+- BREADTH, GREATEST
+usually_on:
+- GA particulars
+- specification
+range:
+- 1
+- 80

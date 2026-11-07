@@ -1,0 +1,12 @@
+id: ramp.run
+subject: ramp:.+
+property: run
+kind: length
+meaning: Horizontal length of a ramp run (PVAG V405.2).
+ai_pointing: false
+range:
+- 100
+- 50000
+unit_hint: mm
+used_by:
+- PVAG V405.2

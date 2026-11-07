@@ -22,3 +22,7 @@ data/reports/*.png
 data/reports/cache/
 # Large raw files: linked in data/sources.md instead of committed
 data/raw/lusitania_deck_plans_ccbysa.jpg
+
+# Local only: IMO bars commercial reuse of its texts, and these are internal review notes.
+docs/rules/imo/
+docs/overnight/review/

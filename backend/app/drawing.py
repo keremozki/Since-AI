@@ -204,7 +204,7 @@ def _gap(a: tuple, b: tuple) -> float:
 
 def _fact(file: str, info: PageInfo, subject: str, prop: str, length: Length, quote: str, where: str,
           bbox: tuple, *, gap_pt: float = 0.0, ambiguous: bool = False, keyword: bool = True,
-          from_table: bool = False) -> Fact:
+          from_table: bool = False, value_box: tuple | None = None) -> Fact:
     confidence = "high"
     if not length.unit_written or gap_pt > FAR_GAP_PT or not keyword:
         confidence = "medium"
@@ -212,7 +212,7 @@ def _fact(file: str, info: PageInfo, subject: str, prop: str, length: Length, qu
         confidence = "low"
     meta = {"reader": "vector", "pairing_gap_in": round(gap_pt / 72, 3), "ambiguous_pairing": ambiguous,
             "ocr_text": info.ocr, "scale_known": bool(info.scale), "scale": info.scale, "from_table": from_table,
-            "unit_written": length.unit_written, "keyword": keyword}
+            "unit_written": length.unit_written, "keyword": keyword, "box": list(value_box or bbox), "raw": length.raw}
     locator = f"page {info.number}, {where} at ({bbox[0]:.0f}, {bbox[1]:.0f}) pt"
     return Fact(subject=subject, property=prop, value=length.value, unit=length.unit, confidence=confidence,
                 source=Source(kind=SourceKind.DOCUMENT, file=file, locator=locator, quote=quote), meta=meta)
@@ -257,7 +257,7 @@ def _door_widths(file: str, info: PageInfo, result: ReadResult) -> None:
         (tag_line, number), (width_line, length, keyword) = tags[ti], widths[wi]
         result.facts.append(_fact(file, info, f"door-number:{number}", "clear_width", length,
                                   f"{tag_line.text} | {width_line.text}", "door label", tag_line.bbox,
-                                  gap_pt=gap, ambiguous=bool(rivals), keyword=keyword))
+                                  gap_pt=gap, ambiguous=bool(rivals), keyword=keyword, value_box=width_line.bbox))
     for ti, (line, number) in enumerate(tags):
         if ti not in used_t and not any(f.subject == f"door-number:{number}" for f in result.facts):
             # The door is on the sheet, but no width is written: the check then says can't tell.
@@ -300,7 +300,7 @@ def _ship_values(file: str, info: PageInfo, result: ReadResult) -> None:
             if mates:
                 gap, other, length = min(mates, key=lambda mate: mate[0])
                 result.facts.append(_fact(file, info, subject, prop, length, f"{line.text} | {other.text}",
-                                          "table row", line.bbox, gap_pt=gap, keyword=True, from_table=True))
+                                          "table row", line.bbox, gap_pt=gap, keyword=True, from_table=True, value_box=other.bbox))
 
 
 def _shown_on(file: str, info: PageInfo, subject: str, line: Line, what: str, missing: str = "") -> Fact:
@@ -346,11 +346,11 @@ def _ramp_values(text: str, info: PageInfo) -> tuple[float | None, Length | None
 
 
 def _ratio_fact(file: str, info: PageInfo, subject: str, n: float, line: Line, quote: str, gap: float,
-                ambiguous: bool) -> Fact:
+                ambiguous: bool, value_box: tuple | None = None) -> Fact:
     confidence = "low" if ambiguous or info.ocr else ("medium" if gap > FAR_GAP_PT else "high")
     meta = {"reader": "vector", "pairing_gap_in": round(gap / 72, 3), "ambiguous_pairing": ambiguous,
             "ocr_text": info.ocr, "scale_known": bool(info.scale), "scale": info.scale, "from_table": False,
-            "unit_written": True, "keyword": True}
+            "unit_written": True, "keyword": True, "box": list(value_box or line.bbox), "raw": f"1:{n:g}"}
     return Fact(subject=subject, property="slope_run_per_rise", value=n, unit="", confidence=confidence, meta=meta,
                 source=Source(kind=SourceKind.DOCUMENT, file=file, quote=quote,
                               locator=f"page {info.number}, ramp label at ({line.bbox[0]:.0f}, {line.bbox[1]:.0f}) pt"))
@@ -369,14 +369,15 @@ def _corridors_and_ramps(file: str, info: PageInfo, result: ReadResult) -> None:
     found: set[str] = set()
     missing: dict[str, str] = {}             # subject -> why its value wasn't used (nearest attempt wins)
 
-    def add_ramp(subject: str, line: Line, quote: str, n, rise, run, gap: float = 0.0, ambiguous: bool = False) -> bool:
+    def add_ramp(subject: str, line: Line, quote: str, n, rise, run, gap: float = 0.0, ambiguous: bool = False,
+                 value_box: tuple | None = None) -> bool:
         if n is not None:
-            result.facts.append(_ratio_fact(file, info, subject, n, line, quote, gap, ambiguous))
+            result.facts.append(_ratio_fact(file, info, subject, n, line, quote, gap, ambiguous, value_box))
             return True
         if rise and run:
             for prop, length in (("rise", rise), ("run", run)):
                 result.facts.append(_fact(file, info, subject, prop, length, quote, "ramp label", line.bbox,
-                                          gap_pt=gap, ambiguous=ambiguous))
+                                          gap_pt=gap, ambiguous=ambiguous, value_box=value_box))
             return True
         return False
 
@@ -451,9 +452,9 @@ def _corridors_and_ramps(file: str, info: PageInfo, result: ReadResult) -> None:
                 missing.setdefault(subject, _why_unread(value_line.text, what, len(widths)))
                 continue
             result.facts.append(_fact(file, info, subject, "clear_width", widths[0], quote, "corridor label",
-                                      tag_line.bbox, gap_pt=gap, ambiguous=bool(rivals)))
+                                      tag_line.bbox, gap_pt=gap, ambiguous=bool(rivals), value_box=value_line.bbox))
         elif not add_ramp(subject, tag_line, quote, *_ramp_values(value_line.text, info), gap=gap,
-                          ambiguous=bool(rivals)):
+                          ambiguous=bool(rivals), value_box=value_line.bbox):
             missing.setdefault(subject, _why_unread(value_line.text, what))
             continue
         used_t.add(ti)

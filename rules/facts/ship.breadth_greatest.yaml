@@ -1,0 +1,24 @@
+id: ship.breadth_greatest
+subject: ship
+property: breadth_greatest
+kind: length
+meaning: Greatest breadth of the vessel (COLREG Rule 3(j)).
+labels:
+- BEAM OVERALL
+- BREADTH OVERALL
+- BREADTH, EXTREME
+- BEAM (EXTREME)
+- MAXIMUM BREADTH
+- BEAM, MAX
+not:
+- BEAM (MLD)
+- BREADTH MOULDED
+- MOULDED BREADTH
+usually_on:
+- GA particulars
+- specification
+range:
+- 1
+- 80
+used_by:
+- COLREG Annex I 2(a)(i)

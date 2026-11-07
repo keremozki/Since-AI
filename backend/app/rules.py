@@ -20,7 +20,11 @@ def load_rules(path: Path, rule_texts_dir: Path | None = None) -> list[Rule]:
     if rule_texts_dir and rule_texts_dir.exists():
         texts = (p.read_text(encoding="utf-8", errors="ignore") for p in rule_texts_dir.rglob("*.md"))
         corpus = _normalise(" ".join(texts))
+    # The IMO excerpts and their quotes are local files, not in the public repo. Without them, those limits show as unconfirmed.
+    local = rule_texts_dir / "imo" / "rule-quotes.yaml" if rule_texts_dir else None
+    quotes = yaml.safe_load(local.read_text(encoding="utf-8")) if local and local.exists() else {}
     for rule in rules:
+        rule.quote = rule.quote or quotes.get(rule.id, "")
         rule.verified = bool(rule.quote) and _normalise(rule.quote) in corpus
     return rules
 

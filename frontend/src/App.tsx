@@ -6,9 +6,10 @@ import InputsPanel from "./InputsPanel";
 import MeasurePanel from "./MeasurePanel";
 import Results from "./Results";
 import ReviewPanel from "./ReviewPanel";
+import ShipCardPanel from "./ShipCardPanel";
 import ShipViewer, { Measurement } from "./ShipViewer";
 
-type Tab = "assistant" | "inputs" | "review";
+type Tab = "assistant" | "inputs" | "review" | "card";
 
 const SAID: Record<Decision, string> = { accept: "read correctly", reject: "misread", unsure: "not sure (not used for training)" };
 
@@ -29,6 +30,7 @@ export default function App() {
   const [learning, setLearning] = useState<ConfidenceStatus | null>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [reviewer, setReviewer] = useState(() => { try { return localStorage.getItem("reviewer") ?? ""; } catch { return ""; } });
+  const [cardVersion, setCardVersion] = useState(0);
 
   const refreshLearning = useCallback(async (id: string) => {
     try {
@@ -66,6 +68,7 @@ export default function App() {
     if (update.dropped) notes.push({ role: "system", text: `${update.dropped} value(s) were rejected because they didn't fit a known fact.` });
     if (update.changes.length) notes.push({ role: "system", text: `Checks rerun. What changed:\n${update.changes.join("\n")}` });
     setLines((current) => [...current, ...notes]);
+    setCardVersion((version) => version + 1);  // new facts can fill the ship card
     refreshLearning(profileId);
   }, [profileId, refreshLearning]);
 
@@ -122,6 +125,8 @@ export default function App() {
     setTab("assistant");
   }, []);
   const closeDetail = useCallback(() => setSelected(null), []);
+  const onCardSaved = useCallback(() => { refresh(profileId); }, [profileId, refresh]);
+  const aiMode = spend?.ai_mode ?? "";
 
   return (
     <div className="app">
@@ -134,8 +139,10 @@ export default function App() {
           </select>
         </label>
         <div className="topbar-actions">
+          {aiMode && <span className="ai-mode" title={aiMode === "offline" ? "No request leaves this machine. AI steps replay saved answers or wait." : "AI requests go to the Claude API."}>AI: {aiMode === "offline" ? "offline" : "live"}</span>}
           {spend && <span className="spend" title={`${spend.calls} AI calls. AI features stop at the cap.`}>AI spend ${spend.spent_usd.toFixed(2)} of ${spend.cap_usd.toFixed(2)}</span>}
           <a className="button" href={`/api/report/${profileId}`} target="_blank" rel="noreferrer">Text report</a>
+          <a className="button" href={`/api/proof/${profileId}`} title="A zip with the rules, facts, results and hashes, which tools/verify_proof.py can check." download>Proof file</a>
         </div>
       </header>
       {learning?.mode === "simulated" && (
@@ -160,7 +167,7 @@ export default function App() {
                 onSaved={(update) => { setMeasuring(false); applyUpdate(update, "Measurement saved."); setTab("assistant"); }} />
             )}
           </ShipViewer>
-          {selected && <FindingDetail key={`${selected.rule_id}|${selected.subject}`} finding={selected} onClose={closeDetail} onAnswer={answer} onReview={review} />}
+          {selected && <FindingDetail key={`${selected.rule_id}|${selected.subject}`} finding={selected} onClose={closeDetail} onAnswer={answer} onReview={review} onUndo={undo} />}
         </div>
         <aside className="side">
           <div className="tabs" role="tablist" aria-label="Side panel">
@@ -169,6 +176,7 @@ export default function App() {
               Inputs{inputs ? ` (${(inputs.model.active ? 1 : 0) + inputs.files.length})` : ""}
             </button>
             <button type="button" role="tab" aria-selected={tab === "review"} onClick={() => setTab("review")}>Review</button>
+            <button type="button" role="tab" aria-selected={tab === "card"} onClick={() => setTab("card")}>Ship card</button>
           </div>
           <div className="tab-body" hidden={tab !== "assistant"}>
             <Assistant profileId={profileId} lines={lines} setLines={setLines} onDone={applyUpdate}
@@ -179,6 +187,9 @@ export default function App() {
           </div>
           <div className="tab-body" hidden={tab !== "review"}>
             <ReviewPanel status={learning} queue={queue} reviewer={reviewer} onReviewer={nameReviewer} onPick={pick} onUndo={undo} />
+          </div>
+          <div className="tab-body" hidden={tab !== "card"}>
+            <ShipCardPanel version={cardVersion} profileId={profileId} reviewer={reviewer} onUseCard={() => setProfileId("card")} onSaved={onCardSaved} onError={setError} />
           </div>
         </aside>
       </main>

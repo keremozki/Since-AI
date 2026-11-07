@@ -1,0 +1,19 @@
+id: ship.length_waterline
+subject: ship
+property: length_waterline
+kind: length
+meaning: Length on the design waterline.
+labels:
+- LWL
+- L.W.L.
+- LENGTH WATERLINE
+- LENGTH ON WATERLINE
+- LENGTH WL
+not:
+- LOA
+- LPP
+usually_on:
+- GA particulars
+range:
+- 5
+- 500

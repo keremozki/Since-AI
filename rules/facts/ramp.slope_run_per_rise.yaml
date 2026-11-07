@@ -1,0 +1,11 @@
+id: ramp.slope_run_per_rise
+subject: ramp:.+
+property: slope_run_per_rise
+kind: number
+meaning: N from a slope written 1:N on the drawing, never computed (PVAG V405.2).
+ai_pointing: false
+range:
+- 1
+- 100
+used_by:
+- PVAG V405.2

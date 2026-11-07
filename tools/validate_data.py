@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app.confidence import ConfidenceGate  # noqa: E402
 from app.drawing import read_pdf  # noqa: E402
 from app.engine import run  # noqa: E402
+from app.reading.code_reader import extra_facts  # noqa: E402
 from app.models import ShipProfile  # noqa: E402
 from app.rules import load_rules  # noqa: E402
 from app.store import FactStore  # noqa: E402
@@ -63,7 +64,8 @@ def compare_facts(read: list[dict], truth: list[dict], absent: list[dict]) -> di
 def compare_results(facts, truth: dict, rules) -> dict:
     p = truth.get("profile", {})
     profile = ShipProfile(id="truth", name=truth["file"], ship_type=p.get("ship_type", ""), passengers=p.get("passengers"),
-                          flag=p.get("flag", ""), accessible_route_all_passage_doors=True)
+                          flag=p.get("flag", ""), accessible_route_all_passage_doors=True,
+                          approved_assumptions=["openings_not_deep"])  # as in the app's passenger profiles
     with tempfile.TemporaryDirectory() as tmp:
         result = run(FactStore(facts), rules, profile, gate=ConfidenceGate(Path(tmp)))  # cold start, as in the app today
     got = {(f.rule_id, f.subject): f.status.value for f in result.findings}
@@ -102,7 +104,8 @@ def main() -> None:
         if truth:
             entry["synthetic"] = truth.get("synthetic")
             entry["reader"] = compare_facts(facts, truth.get("facts", []), truth.get("absent_facts", []))
-            entry["checks"] = compare_results(read.facts, truth, rules)
+            # Through the real second reading, as in the app: a value OCR can't confirm gives can't tell.
+            entry["checks"] = compare_results(extra_facts(pdf.name, data, None, []), truth, rules)
         report[pdf.name] = entry
 
     (ROOT / "data" / "reports" / "validation.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

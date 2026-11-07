@@ -1,0 +1,18 @@
+id: ship.main_vertical_zones
+subject: ship
+property: main_vertical_zones
+kind: number
+meaning: Number of main vertical fire zones.
+labels:
+- MAIN VERTICAL ZONES
+- MVZ
+# "Fire zones" can mean fire detection zones, and a wrong count can raise the evacuation limit from 60 to 80 minutes.
+not:
+- FIRE DETECTION ZONES
+- DETECTION ZONES
+usually_on:
+- fire plan
+- specification
+range:
+- 1
+- 20

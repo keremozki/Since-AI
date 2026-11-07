@@ -1,0 +1,17 @@
+id: ship.crew_complement
+subject: ship
+property: crew_complement
+kind: number
+meaning: Number of crew, as stated.
+labels:
+- CREW
+- CREW COMPLEMENT
+- NUMBER OF CREW
+not:
+- CREW BERTHS
+- S/R
+usually_on:
+- specification
+range:
+- 1
+- 3000

@@ -1,0 +1,18 @@
+id: ship.passengers
+subject: ship
+property: passengers
+kind: number
+meaning: Number of passengers the ship is certified to carry.
+labels:
+- PASSENGERS
+- PAX
+- MAX PASSENGERS
+- PASSENGER CAPACITY
+not:
+- DOUBLE OCCUPANCY
+- LOWER BERTHS
+usually_on:
+- specification
+range:
+- 0
+- 10000

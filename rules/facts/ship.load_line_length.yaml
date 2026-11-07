@@ -1,0 +1,25 @@
+id: ship.load_line_length
+subject: ship
+property: load_line_length
+kind: length
+meaning: 'Load Line length L: 96% of the total length on a waterline at 85% of the
+  least moulded depth, or the length from the fore side of the stem to the axis of
+  the rudder stock on that waterline, if greater.'
+labels:
+- LOAD LINE LENGTH
+- L (LOAD LINE)
+- LENGTH (LL)
+- RULE LENGTH
+not:
+- LOA
+- LWL
+- LPP
+usually_on:
+- specification
+- load line calculation
+range:
+- 5
+- 500
+used_by:
+- SOLAS III/3.12
+- Load Line Convention

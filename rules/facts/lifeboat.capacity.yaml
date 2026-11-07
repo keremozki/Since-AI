@@ -1,0 +1,16 @@
+id: lifeboat.capacity
+subject: lifeboats:(port|starboard)
+property: capacity_persons
+kind: number
+meaning: Total rated lifeboat capacity on one side, in persons.
+labels:
+- LIFEBOAT CAPACITY
+- LIFEBOATS
+not:
+- TENDER
+usually_on:
+- LSA plan
+- specification
+range:
+- 1
+- 10000

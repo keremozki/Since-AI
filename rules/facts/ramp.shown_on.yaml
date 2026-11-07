@@ -1,0 +1,9 @@
+id: ramp.shown_on
+subject: ramp:.+
+property: shown_on
+kind: text
+meaning: The sheet or page where a ramp is labelled, when no slope or rise and run
+  is written for it.
+ai_pointing: false
+used_by:
+- PVAG V405.2

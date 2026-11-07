@@ -9,20 +9,20 @@ from app import lessons
 from app.confidence import ConfidenceGate, make_label
 from app.ingest import _same_value, crop, merge_readers
 from app.main import AppState, create_app
-from app.models import Evidence, Fact, Finding, Source, SourceKind, Status
+from app.models import CheckBasis, Fact, Finding, Source, SourceKind, Status, Tier
 from app.store import FactStore
 
 
 def width(value, unit="in", kind=SourceKind.DOCUMENT, subject="door-number:7", quote='D7 CL OPG 31"'):
     return Fact(subject=subject, property="clear_width", value=value, unit=unit,
-                source=Source(kind=kind, file="plan.pdf", locator="page 1, door label at (100, 100) pt", quote=quote))
+                tier=Tier.A, source=Source(kind=kind, file="plan.pdf", locator="page 1, door label at (100, 100) pt", quote=quote))
 
 
 def fail(value_in=30.0, subject="door-number:7", confidence="high"):
     fact = width(value_in, subject=subject).model_copy(update={"confidence": confidence})
     return Finding(rule_id="D", rule_title="Door", area="A", rule_source="S", status=Status.FAIL, subject=subject,
                    label="Door 7", measured=f"{value_in} in",
-                   evidence=Evidence(measured=value_in * 25.4, limit=812.8, limit_unit="in", facts=[fact]))
+                   evidence=CheckBasis(measured=value_in * 25.4, limit=812.8, limit_unit="in", facts=[fact]))
 
 
 def answers(g, accepts, rejects):

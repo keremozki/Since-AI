@@ -41,7 +41,9 @@ export default function InputsPanel({ profileId, inputs, result, note, onDone, o
       }), (u) => `${file.name} imported: ${u.inputs.model.parts} parts.`);
     } else {
       act("Reading the file.", () => api.upload(profileId, file, pages),
-        (u) => `${file.name} read${u.cached ? " from saved results, at no cost" : ""}: ${u.recorded.length} new fact(s).`);
+        (u) => `${file.name} read${u.cached ? " from saved results, at no cost" : ""}: ${u.recorded.length} new fact(s).`
+          + (u.reading?.status === "couldn't be read" ? ` It couldn't be read: ${u.reading.notes[0] ?? ""}` : "")
+          + (u.reading?.pending.length ? ` ${u.reading.pending.length} AI step(s) wait for an answer, so some values have one reading.` : ""));
     }
   };
 
@@ -68,8 +70,8 @@ export default function InputsPanel({ profileId, inputs, result, note, onDone, o
         onDragLeave={() => setDragging(false)} onDrop={drop}>
         <strong>Add a file</strong>
         <span>Drop it here, or click to choose</span>
-        <small>3D model: .nwd{current?.active ? " (replaces the current one)" : ""}<br />Drawing or document: PDF, PNG, JPG, WEBP, MD, TXT</small>
-        <input ref={picker} className="visually-hidden" type="file" accept=".nwd,.pdf,.png,.jpg,.jpeg,.webp,.md,.txt"
+        <small>3D model: .nwd{current?.active ? " (replaces the current one)" : ""}<br />Drawing or document: PDF, PNG, JPG, WEBP, MD, TXT<br />Schedule or model: XLSX, CSV, IFC</small>
+        <input ref={picker} className="visually-hidden" type="file" accept=".nwd,.pdf,.png,.jpg,.jpeg,.webp,.md,.txt,.xlsx,.csv,.ifc"
           disabled={disabled} onChange={(e) => addFile(e.target.files?.[0])} />
       </label>
       <label className="pages">PDF pages to read <small>(optional)</small>

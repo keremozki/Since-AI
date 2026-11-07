@@ -18,8 +18,10 @@ PASSENGER = ShipProfile(
     ship_type="passenger",
     passengers=400,
     flag="US",
-    note="Applies passenger ship rules to whatever you add. Every passage door is treated as on an accessible route.",
+    note=("Applies passenger ship rules to whatever you add. Every passage door is treated as on an accessible route, "
+          "and door openings are taken as not more than 24 in deep."),
     accessible_route_all_passage_doors=True,
+    approved_assumptions=["openings_not_deep"],
 )
 
 PASSENGER_TEST = ShipProfile(
@@ -32,6 +34,7 @@ PASSENGER_TEST = ShipProfile(
           "rules to its real design data, and adds one labelled seeded conflict."),
     accessible_route_all_passage_doors=True,
     use_demo_faults=True,
+    approved_assumptions=["openings_not_deep"],
 )
 
 PROFILES = {profile.id: profile for profile in (RCRV, PASSENGER, PASSENGER_TEST)}

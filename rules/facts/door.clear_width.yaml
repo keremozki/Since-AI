@@ -1,0 +1,26 @@
+id: door.clear_width
+subject: door-number:[\w.-]+
+property: clear_width
+kind: length
+meaning: Clear width with the door open 90 degrees, measured between the face of the
+  door and the stop (2010 ADA 404.2.3, PVAG V404.2.3).
+labels:
+- CLEAR WIDTH
+- CLEAR OPENING
+- CLR OPG
+- CLEAR OPG
+- CLEAR OPENING WIDTH
+not:
+- LEAF WIDTH
+- DOOR WIDTH
+- OPENING WIDTH
+- IfcDoor OverallWidth
+- FRAME WIDTH
+usually_on:
+- door schedule
+- door type drawings
+- 3D model part description
+range:
+- 300
+- 3000
+unit_hint: mm

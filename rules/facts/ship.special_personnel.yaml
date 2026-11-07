@@ -1,0 +1,17 @@
+id: ship.special_personnel
+subject: ship
+property: special_personnel
+kind: number
+meaning: Special personnel (SPS Code 1.3.12), such as scientists and technicians.
+labels:
+- SPECIAL PERSONNEL
+- SCIENTISTS
+- SCIENCE PARTY
+not:
+- SCIENCE BERTHS
+- S/R
+usually_on:
+- specification
+range:
+- 0
+- 1000
