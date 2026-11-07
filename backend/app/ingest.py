@@ -14,7 +14,7 @@ from .vocabulary import FACT_SCHEMA, to_fact, vocabulary_text
 
 PROMPT_VERSION = "2"
 MAX_IMAGE_EDGE = 1568
-MAX_PDF_IMAGE_PAGES = 6
+MAX_PDF_IMAGE_PAGES = 20
 MIN_TEXT_CHARS_PER_PAGE = 50
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
