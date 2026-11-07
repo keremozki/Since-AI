@@ -147,3 +147,19 @@ def test_corridor_named_without_width_is_cant_tell():
     store = FactStore([fact("corridor:C9", "shown_on", "page 1", "")])
     finding = check_corridor_width(CORRIDOR_RULE, store, PASSENGER)[0]
     assert finding.status == Status.CANT_TELL and "C9" in finding.question
+
+
+def test_cant_tell_names_the_label_page_and_reason():
+    """A labelled object with no usable value says which text was found, where, and why it wasn't used."""
+    from app.engine import run
+    from app.models import ShipProfile
+    from app.rules import load_rules
+    from app.store import FactStore
+    pdf = ROOT / "data" / "synthetic" / "SYNTHETIC_corridor_ramp_seed202" / "SYNTHETIC_cr_s202_02.pdf"
+    facts = read_pdf(pdf.read_bytes(), pdf.name).facts
+    rules = load_rules(ROOT / "rules" / "rules.yaml", ROOT / "docs" / "rules")
+    result = run(FactStore(facts), rules, ShipProfile(id="p", name="t", ship_type="passenger", passengers=400))
+    c24 = next(f for f in result.findings if f.label == "Corridor C2-4")
+    assert c24.status.value == "cant_tell"
+    assert "'CORRIDOR C2-4  CLEAR WIDTH 1065'" in c24.measured and "page 1" in c24.measured
+    assert "no unit" in c24.measured and c24.read_quote and c24.sources

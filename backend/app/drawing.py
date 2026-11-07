@@ -262,7 +262,9 @@ def _door_widths(file: str, info: PageInfo, result: ReadResult) -> None:
         if ti not in used_t and not any(f.subject == f"door-number:{number}" for f in result.facts):
             # The door is on the sheet, but no width is written: the check then says can't tell.
             result.facts.append(Fact(subject=f"door-number:{number}", property="shown_on", value=f"page {info.number}",
-                                     confidence="high", meta={"reader": "vector"},
+                                     confidence="high",
+                                     meta={"reader": "vector",
+                                           "missing": "no width is written next to the tag or in a door schedule"},
                                      source=Source(kind=SourceKind.DOCUMENT, file=file, quote=line.text,
                                                    locator=f"page {info.number}, door tag at ({line.bbox[0]:.0f}, {line.bbox[1]:.0f}) pt")))
     for wi, (line, _, _) in enumerate(widths):
@@ -301,11 +303,23 @@ def _ship_values(file: str, info: PageInfo, result: ReadResult) -> None:
                                           "table row", line.bbox, gap_pt=gap, keyword=True, from_table=True))
 
 
-def _shown_on(file: str, info: PageInfo, subject: str, line: Line, what: str) -> Fact:
+def _shown_on(file: str, info: PageInfo, subject: str, line: Line, what: str, missing: str = "") -> Fact:
+    """`missing` says why no value was taken, so the engineer sees which text caused the can't tell."""
     return Fact(subject=subject, property="shown_on", value=f"page {info.number}", confidence="high",
-                meta={"reader": "vector"},
+                meta={"reader": "vector", "missing": missing},
                 source=Source(kind=SourceKind.DOCUMENT, file=file, quote=line.text,
                               locator=f"page {info.number}, {what} at ({line.bbox[0]:.0f}, {line.bbox[1]:.0f}) pt"))
+
+
+def _why_unread(text: str, kind: str, values: int = 0, rotated: bool = False) -> str:
+    """Plain words for why the text next to a label gave no value."""
+    if rotated:
+        return f"the text next to it ('{text}') is rotated, so it may be a length, not the {kind}"
+    if values > 1:
+        return f"the text next to it ('{text}') gives more than one value"
+    if re.search(r"\d", text):
+        return f"the text next to it ('{text}') has a number but no unit, and the sheet has no unit note"
+    return f"the text next to it ('{text}') has no value"
 
 
 def _corridor_width(text: str, info: PageInfo) -> list[Length]:
@@ -353,6 +367,7 @@ def _corridors_and_ramps(file: str, info: PageInfo, result: ReadResult) -> None:
     tags: list[tuple[Line, str, str]] = []   # (line, kind, subject) with no value on the line
     values: list[tuple[Line, str]] = []      # (line, kind) with a keyword and no tag
     found: set[str] = set()
+    missing: dict[str, str] = {}             # subject -> why its value wasn't used (nearest attempt wins)
 
     def add_ramp(subject: str, line: Line, quote: str, n, rise, run, gap: float = 0.0, ambiguous: bool = False) -> bool:
         if n is not None:
@@ -375,14 +390,21 @@ def _corridors_and_ramps(file: str, info: PageInfo, result: ReadResult) -> None:
                                           line.bbox))
                 found.add(subject)
                 continue
+            rest = line.text[corridor.end():]
             if len(widths) > 1:
                 result.skipped.append(f"page {info.number}: {line.text!r} has several widths for one corridor")
+                missing[subject] = "that line gives more than one width"
+            elif CORRIDOR_WIDTH_WORDS.search(rest) and re.search(r"\d", rest):
+                missing[subject] = "the width on that line has no unit, and the sheet has no unit note"
             tags.append((line, "corridor", subject))
         elif ramp:
             subject = f"ramp:{ramp.group(1).upper()}"
             if add_ramp(subject, line, line.text, *_ramp_values(line.text[ramp.end():], info)):
                 found.add(subject)
             else:
+                rest = line.text[ramp.end():]
+                if RAMP_WORDS.search(rest) and re.search(r"\d", rest):
+                    missing[subject] = "that line has numbers, but no 1:N slope and no rise and run with units"
                 tags.append((line, "ramp", subject))
         elif DOOR_TAG.search(line.text) or WIDTH_WORDS.search(line.text):
             continue
@@ -413,9 +435,11 @@ def _corridors_and_ramps(file: str, info: PageInfo, result: ReadResult) -> None:
         if gap > MAX_GAP_PT or ti in used_t or vi in used_v:
             continue
         (tag_line, kind, subject), (value_line, _) = tags[ti], values[vi]
+        what = "width" if kind == "corridor" else "slope"
         if not value_line.horizontal:
             result.skipped.append(f"page {info.number}: {value_line.text!r} near {tag_line.text!r} is rotated, so it "
                                   "may be a length, not the width or slope; not used")
+            missing.setdefault(subject, _why_unread(value_line.text, what, rotated=True))
             used_v.add(vi)
             continue
         rivals = [g for g, t2, v2 in pairs if (t2 == ti) != (v2 == vi) and (t2 == ti or v2 == vi)
@@ -424,18 +448,24 @@ def _corridors_and_ramps(file: str, info: PageInfo, result: ReadResult) -> None:
         if kind == "corridor":
             widths = _corridor_width(value_line.text, info)
             if len(widths) != 1:
+                missing.setdefault(subject, _why_unread(value_line.text, what, len(widths)))
                 continue
             result.facts.append(_fact(file, info, subject, "clear_width", widths[0], quote, "corridor label",
                                       tag_line.bbox, gap_pt=gap, ambiguous=bool(rivals)))
         elif not add_ramp(subject, tag_line, quote, *_ramp_values(value_line.text, info), gap=gap,
                           ambiguous=bool(rivals)):
+            missing.setdefault(subject, _why_unread(value_line.text, what))
             continue
         used_t.add(ti)
         used_v.add(vi)
         found.add(subject)
     for line, kind, subject in tags:
         if subject not in found and not any(f.subject == subject for f in result.facts):
-            result.facts.append(_shown_on(file, info, subject, line, f"{kind} label"))
+            if kind == "corridor":
+                default = "no width is written next to it or in a corridor schedule"
+            else:
+                default = "no slope (1:N), or rise and run, is written next to it"
+            result.facts.append(_shown_on(file, info, subject, line, f"{kind} label", missing.get(subject, default)))
             needed = "width" if kind == "corridor" else "slope, or rise and run,"
             result.skipped.append(f"page {info.number}: {line.text!r} has no readable {needed} with a unit")
     for vi, (line, kind) in enumerate(values):

@@ -86,6 +86,18 @@ def _sources(*facts: Fact | None) -> list[str]:
     return list(dict.fromkeys(f.source.describe() for f in facts if f))
 
 
+def _not_written(rule: Rule, subject: str, label: str, shown: Fact | None, what: str, **fields) -> Finding:
+    """Can't tell for a labelled object with no usable value. It names the text found, where, and why
+    the value next to it wasn't used, so the engineer knows exactly what to look at."""
+    measured = f"{what} not written on the drawing"
+    extra = {}
+    if shown is not None:
+        reason = shown.meta.get("missing") or f"no {what.lower()} is written next to it"
+        measured = f"{what} not readable: label '{shown.source.quote}' is on {shown.value}, but {reason}."
+        extra = dict(read_quote=shown.source.quote, read_file=shown.source.file, read_locator=shown.source.locator)
+    return _finding(rule, Status.CANT_TELL, subject, label, measured=measured, sources=_sources(shown), **extra, **fields)
+
+
 def _values_differ(a: Fact, b: Fact) -> bool:
     if isinstance(a.value, str) or isinstance(b.value, str):
         return str(a.value).strip().lower() != str(b.value).strip().lower()
@@ -180,9 +192,9 @@ def _drawing_doors(rule: Rule, store: FactStore, conflicts: dict, required: str,
         width, label = store.one(subject, "clear_width"), f"Door {number}"
         if width is None:
             shown = store.one(subject, "shown_on")
-            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Clear width not written on the drawing",
-                                     required=required, why=why, sources=_sources(shown), assumptions=door_assumptions,
-                                     question=f"What is the clear width of door {number}?"))
+            findings.append(_not_written(rule, subject, label, shown, "Clear width", required=required, why=why,
+                                         assumptions=door_assumptions,
+                                         question=f"What is the clear width of door {number}?"))
             continue
         passed, width_mm, limit_mm, gap, note = _width_verdict(width, min_in, min_mm)
         if passed and width.confidence == "low":
@@ -325,9 +337,8 @@ def check_corridor_width(rule: Rule, store: FactStore, profile: ShipProfile) -> 
             continue
         if width is None:
             shown = store.one(subject, "shown_on")
-            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Clear width not written on the drawing",
-                                     required=required, why=why, sources=_sources(shown),
-                                     question=f"What is the clear width of corridor {name}?"))
+            findings.append(_not_written(rule, subject, label, shown, "Clear width", required=required, why=why,
+                                         question=f"What is the clear width of corridor {name}?"))
             continue
         mm, limit = to_mm(float(width.value), width.unit), to_mm(min_in, "in") * (1 - FLOAT_SLACK)
         common = dict(measured=f"{fmt_length(float(width.value), width.unit)} clear width", required=required, why=why,
@@ -379,8 +390,9 @@ def check_ramp_slope(rule: Rule, store: FactStore, profile: ShipProfile) -> list
             findings += _waiting(rule, blocked, label)
             continue
         if found is None:
-            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Slope, or rise and run, not stated",
-                                     required=required, why=why, question=f"What is the slope of ramp {name}, or its rise and run?"))
+            findings.append(_not_written(rule, subject, label, store.one(subject, "shown_on"), "Slope, or rise and run,",
+                                         required=required, why=why,
+                                         question=f"What is the slope of ramp {name}, or its rise and run?"))
             continue
         slope, facts = found
         unsure = any(f.confidence == "low" for f in facts)
