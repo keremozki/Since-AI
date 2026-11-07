@@ -1,4 +1,4 @@
-import { Status } from "./api";
+import { Finding, Inputs, Status } from "./api";
 
 export const STATUS_ORDER: Status[] = ["fail", "conflict", "cant_tell", "pass"];
 
@@ -30,6 +30,21 @@ export function StatusIcon({ status, size = 14 }: { status: Status; size?: numbe
       {status === "cant_tell" && <path d="M6 6.2a2 2 0 1 1 2.8 1.9c-.6.3-.8.7-.8 1.2m0 2.2v.1" {...common} />}
     </svg>
   );
+}
+
+export const NO_SOURCE = "No source yet";
+
+/** Where a result's data came from, in the names shown in the Inputs tab. */
+export function originsOf(finding: Finding, inputs: Inputs | null): string[] {
+  const names = [inputs?.model.name ?? "", ...(inputs?.files.map((file) => file.name) ?? [])].filter(Boolean);
+  const origins = new Set<string>();
+  for (const source of finding.sources) {
+    for (const name of names) if (source.includes(name)) origins.add(name);
+    if (source.includes("Engineer in chat")) origins.add("Chat answer");
+    if (source.includes("3D measurement")) origins.add("3D measurement");
+    if (source.includes("Seeded demo fault")) origins.add("Seeded test fault");
+  }
+  return [...origins];
 }
 
 /** "Main Deck (19.1 ft above baseline)" becomes "Main Deck". */

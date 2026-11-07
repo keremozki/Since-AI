@@ -87,6 +87,15 @@ def test_ai_reply_cannot_change_a_result(tmp_path):
     assert body["result"]["counts"]["cant_tell"] == 1
 
 
+def test_passenger_profile_has_no_seeded_faults(tmp_path):
+    api, _ = client(tmp_path, FakeClaude())
+    plain = api.get("/api/run/passenger").json()["result"]
+    seeded = api.get("/api/run/passenger-test").json()["result"]
+    assert plain["counts"]["conflict"] == 0
+    assert seeded["counts"]["conflict"] == 1
+    assert plain["profile"]["ship_type"] == "passenger"
+
+
 def test_facts_survive_a_restart(tmp_path):
     fake = FakeClaude({"reply": "Recorded.", "facts": [raw("ship", "persons_on_board", 29, "")]})
     api, state = client(tmp_path, fake)
@@ -157,16 +166,42 @@ def test_removing_an_unknown_file_is_an_error(tmp_path):
     assert api.delete("/api/inputs/files", params={"profile": "rcrv", "name": "nope.png"}).status_code == 404
 
 
-def test_removing_the_model_removes_its_facts_then_restore_brings_them_back(tmp_path):
+def test_removing_the_model_takes_it_out_completely(tmp_path, monkeypatch):
     api, state = client(tmp_path, FakeClaude())
+    parts = [{"name": "LIFERAFT SINGLE RACK", "x_in": 0.0, "y_in": 5.0, "z_in": 0.0}]
+    import_model(api, monkeypatch, parts)
+    assert list((state.data_dir / "models").glob("*.json"))
     body = api.delete("/api/inputs/model", params={"profile": "rcrv"}).json()
-    assert body["inputs"]["model"] == {"name": "", "parts": 0, "has_view": False, "active": False, "restorable": True}
+    assert body["inputs"]["model"] == {"name": "", "parts": 0, "has_view": False, "active": False}
     raft = next(f for f in body["result"]["findings"] if f["rule_id"] == "R")
     assert raft["measured"] == "No liferaft racks in the design data"
-    assert (state.data_dir / "parts.json").exists()
-    restored = api.post("/api/inputs/model/restore", params={"profile": "rcrv"}).json()
-    assert restored["inputs"]["model"]["parts"] == 2
-    assert "2 rafts on port" in restored["result"]["findings"][0]["measured"]
+    assert not list((state.data_dir / "models").glob("*.json"))
+
+
+def test_there_is_no_restore_after_removing(tmp_path):
+    api, _ = client(tmp_path, FakeClaude())
+    api.delete("/api/inputs/model", params={"profile": "rcrv"})
+    assert api.post("/api/inputs/model/restore", params={"profile": "rcrv"}).status_code in (404, 405)
+    assert api.get("/api/inputs").json()["model"]["active"] is False
+
+
+def test_the_same_model_can_be_uploaded_again_after_removing(tmp_path, monkeypatch):
+    api, _ = client(tmp_path, FakeClaude())
+    api.delete("/api/inputs/model", params={"profile": "rcrv"})
+    parts = [{"name": "LIFERAFT DOUBLE RACK", "x_in": 0.0, "y_in": 10.0, "z_in": 0.0}]
+    assert import_model(api, monkeypatch, parts).json()["inputs"]["model"]["parts"] == 1
+
+
+def test_an_older_save_with_a_restorable_model_cleans_it_up(tmp_path):
+    api, state = client(tmp_path, FakeClaude())
+    stored = state.data_dir / "models" / "old.json"
+    stored.parent.mkdir()
+    stored.write_text("{}")
+    (state.data_dir / "inputs.json").write_text(json.dumps({
+        "active_model": None, "last_model": "models/old.json", "geometry_for": None, "files": []}))
+    reloaded = AppState(state.data_dir, state.rules_file, state.rule_texts_dir, claude=FakeClaude())
+    assert reloaded.inputs()["model"]["active"] is False
+    assert not stored.exists()
 
 
 def test_removal_survives_a_restart(tmp_path):
@@ -196,12 +231,12 @@ def test_measuring_needs_a_model(tmp_path):
     assert api.post("/api/measure", params={"profile": "rcrv"}, json=measurement_body()).status_code == 400
 
 
-def test_measurements_do_not_count_while_the_model_is_removed(tmp_path):
+def test_removing_the_model_deletes_its_measurements(tmp_path):
     api, state = client(tmp_path, FakeClaude())
     api.post("/api/measure", params={"profile": "rcrv"}, json=measurement_body())
     api.delete("/api/inputs/model", params={"profile": "rcrv"})
     assert state.inputs()["measurements"] == 0
-    assert api.post("/api/inputs/model/restore", params={"profile": "rcrv"}).json()["inputs"]["measurements"] == 1
+    assert state.added == []
 
 
 def test_measurements_and_chat_can_be_removed_as_groups(tmp_path):

@@ -70,7 +70,7 @@ export interface RecordedFact {
 }
 
 export interface Inputs {
-  model: { name: string; parts: number; has_view: boolean; active: boolean; restorable: boolean };
+  model: { name: string; parts: number; has_view: boolean; active: boolean };
   files: { name: string; facts: number }[];
   measurements: number;
   chat: number;
@@ -139,8 +139,6 @@ export const api = {
   inputs: () => fetch("/api/inputs").then((r) => parse<Inputs>(r)),
   removeModel: (profile: string) =>
     fetch(`/api/inputs/model?profile=${encodeURIComponent(profile)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
-  restoreModel: (profile: string) =>
-    fetch(`/api/inputs/model/restore?profile=${encodeURIComponent(profile)}`, { method: "POST" }).then((r) => parse<UpdateResponse>(r)),
   /** Uses XMLHttpRequest because fetch can't report upload progress. */
   importModel: (profile: string, file: File, onUploaded: (fraction: number) => void) =>
     new Promise<UpdateResponse>((resolve, reject) => {

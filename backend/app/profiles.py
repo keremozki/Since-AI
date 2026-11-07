@@ -12,6 +12,16 @@ RCRV = ShipProfile(
     note="US research vessel under 46 CFR Subchapter U with a SOLAS Special Purpose certificate.",
 )
 
+PASSENGER = ShipProfile(
+    id="passenger",
+    name="Passenger ship (no test faults)",
+    ship_type="passenger",
+    passengers=400,
+    flag="US",
+    note="Applies passenger ship rules to whatever you add. Every passage door is treated as on an accessible route.",
+    accessible_route_all_passage_doors=True,
+)
+
 PASSENGER_TEST = ShipProfile(
     id="passenger-test",
     name="RCRV test case: passenger ship rules, with seeded faults",
@@ -24,7 +34,7 @@ PASSENGER_TEST = ShipProfile(
     use_demo_faults=True,
 )
 
-PROFILES = {profile.id: profile for profile in (RCRV, PASSENGER_TEST)}
+PROFILES = {profile.id: profile for profile in (RCRV, PASSENGER, PASSENGER_TEST)}
 
 
 def demo_faults() -> list[Fact]:

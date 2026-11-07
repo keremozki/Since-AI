@@ -135,7 +135,11 @@ select, input:not([type="file"]):not([type="range"]) {
 .summary { font-size: 13px; margin-bottom: 8px; }
 .profile-note { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
 .profile-note.test-case { background: var(--warn-bg); border-radius: 6px; color: #5f4410; padding: 6px 9px; }
-.search { margin-bottom: 8px; width: 100%; }
+.finders { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.search { width: 100%; }
+.origin-filter { align-items: center; color: var(--muted); display: flex; font-size: 12px; gap: 6px; }
+.origin-filter select { color: var(--ink); flex: 1; min-width: 0; }
+.finding-origin { color: var(--muted); display: block; font-size: 11px; overflow-wrap: anywhere; }
 
 .status-group { margin-top: 12px; }
 .status-group > h2 { align-items: center; display: flex; font-size: 13px; gap: 6px; margin-bottom: 4px; }
@@ -315,6 +319,7 @@ select, input:not([type="file"]):not([type="range"]) {
 .inputs li strong { font-size: 12px; font-weight: 600; }
 .inputs li small { color: var(--muted); font-size: 11px; }
 .inputs li button { flex: none; font-size: 12px; padding: 2px 8px; }
+.inputs li small.unused { color: var(--conflict); }
 
 @media (max-width: 1100px) {
   .app { height: auto; min-height: 100%; }

@@ -64,8 +64,8 @@ Open http://127.0.0.1:8000. The checks work with no API key, but chat and drawin
 The Inputs panel lists the 3D model, each drawing or document, saved measurements, and chat answers. Each
 can be removed, and the checks rerun at once. The app holds one 3D model at a time.
 
-- Removing the 3D model keeps its files on disk, so Restore brings it back at once. Its measurements stop
-  counting until then.
+- Removing the 3D model takes it out completely, along with any measurements taken on it. To use it again,
+  upload the `.nwd` file. `ship-data/parts.json` and the viewer geometry stay on disk, as they're set up by hand.
 - Importing a different `.nwd` replaces the current model and deletes measurements taken on the old one.
 - A removed drawing can be added again at no cost, because its facts are cached.
 - The 3D view exists only for the RCRV. Other models are checked, but aren't shown in the viewer.

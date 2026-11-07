@@ -1,9 +1,11 @@
 import { DragEvent, useRef, useState } from "react";
-import { api, Inputs, UpdateResponse } from "./api";
+import { api, Inputs, RunResult, UpdateResponse } from "./api";
+import { originsOf } from "./shared";
 
-export default function InputsPanel({ profileId, inputs, note, onDone, onError, onStartOver }: {
+export default function InputsPanel({ profileId, inputs, result, note, onDone, onError, onStartOver }: {
   profileId: string;
   inputs: Inputs | null;
+  result: RunResult | null;
   note: string;
   onDone: (update: UpdateResponse, intro: string) => void;
   onError: (text: string) => void;
@@ -53,6 +55,7 @@ export default function InputsPanel({ profileId, inputs, note, onDone, onError, 
     }
   };
 
+  const resultsFrom = (name: string) => (result?.findings ?? []).filter((f) => originsOf(f, inputs).includes(name)).length;
   const disabled = Boolean(busy);
   const current = inputs?.model;
   const hasAdded = Boolean(inputs?.files.length || inputs?.measurements || inputs?.chat);
@@ -77,21 +80,27 @@ export default function InputsPanel({ profileId, inputs, note, onDone, onError, 
       <ul>
         {current?.active && (
           <li>
-            <span><strong>{current.name}</strong><small>3D model · {current.parts} parts{current.has_view ? "" : " · no 3D view"}</small></span>
+            <span><strong>{current.name}</strong><small>3D model · {current.parts} parts · {resultsFrom(current.name)} result(s){current.has_view ? "" : " · no 3D view"}</small></span>
             <button type="button" disabled={disabled} aria-label={`Remove ${current.name}`}
-              onClick={() => act("Removing the model.", () => api.removeModel(profileId), () => `${current.name} removed.`)}>Remove</button>
+              onClick={() => {
+                if (window.confirm(`Remove ${current.name}? Any measurements taken on it are deleted too. To use the model again, you'll need to upload the file.`)) {
+                  act("Removing the model.", () => api.removeModel(profileId), () => `${current.name} removed.`);
+                }
+              }}>Remove</button>
           </li>
         )}
         {current && !current.active && (
           <li>
-            <span><strong>No 3D model</strong>{current.restorable && <small>The removed model can be brought back.</small>}</span>
-            {current.restorable && <button type="button" disabled={disabled}
-              onClick={() => act("Restoring the model.", () => api.restoreModel(profileId), (u) => `${u.inputs.model.name} restored.`)}>Restore</button>}
+            <span><strong>No 3D model</strong><small>Add a .nwd file above to include one.</small></span>
           </li>
         )}
         {inputs?.files.map((file) => (
           <li key={file.name}>
-            <span><strong>{file.name}</strong><small>{file.facts} fact(s) read</small></span>
+            <span>
+              <strong>{file.name}</strong>
+              <small>{file.facts} fact(s) read · {resultsFrom(file.name)} result(s)</small>
+              {file.facts > 0 && resultsFrom(file.name) === 0 && <small className="unused">Read, but no check uses these facts yet.</small>}
+            </span>
             <button type="button" disabled={disabled} aria-label={`Remove ${file.name}`}
               onClick={() => act("Removing the file.", () => api.removeFile(profileId, file.name), () => `${file.name} removed.`)}>Remove</button>
           </li>

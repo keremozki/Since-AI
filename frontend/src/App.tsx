@@ -98,7 +98,7 @@ export default function App() {
         </div>
       )}
       <main className="layout">
-        <Results result={result} selected={selected} onSelect={setSelected} />
+        <Results result={result} inputs={inputs} selected={selected} onSelect={setSelected} />
         <div className="middle">
           <ShipViewer findings={result?.findings ?? []} selected={selected} onSelect={setSelected} measuring={measuring}
             onMeasured={setMeasurement} modelVisible={inputs?.model.has_view ?? null} modelActive={inputs?.model.active ?? true}
@@ -122,7 +122,7 @@ export default function App() {
               question={question} onClearQuestion={() => setQuestion("")} />
           </div>
           <div className="tab-body" hidden={tab !== "inputs"}>
-            <InputsPanel profileId={profileId} inputs={inputs} note={inputsNote} onDone={onInputsDone} onError={setError} onStartOver={startOver} />
+            <InputsPanel profileId={profileId} inputs={inputs} result={result} note={inputsNote} onDone={onInputsDone} onError={setError} onStartOver={startOver} />
           </div>
         </aside>
       </main>

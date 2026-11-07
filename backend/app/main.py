@@ -42,7 +42,6 @@ class AppState:
         self.added_file = data_dir / "added_facts.json"
         self.inputs_file = data_dir / "inputs.json"
         self.active_model: str | None = None
-        self.last_model: str | None = None
         self.geometry_for: str | None = None
         self.files: list[str] = []
         self._load_inputs()
@@ -62,8 +61,11 @@ class AppState:
     def _load_inputs(self) -> None:
         if self.inputs_file.exists():
             saved = json.loads(self.inputs_file.read_text(encoding="utf-8"))
-            self.active_model, self.last_model = saved["active_model"], saved["last_model"]
+            self.active_model = saved["active_model"]
             self.geometry_for, self.files = saved["geometry_for"], saved["files"]
+            # Older saves could keep a removed model for restoring. That copy is no longer needed.
+            if saved.get("last_model") and not self.active_model:
+                self._delete_stored_model(saved["last_model"])
             return
         # First run: the model set up on disk is active, and the viewer's geometry belongs to it.
         if (self.data_dir / DEFAULT_PARTS).exists():
@@ -74,7 +76,7 @@ class AppState:
     def _save_inputs(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.inputs_file.write_text(json.dumps({
-            "active_model": self.active_model, "last_model": self.last_model,
+            "active_model": self.active_model,
             "geometry_for": self.geometry_for, "files": self.files}), encoding="utf-8")
 
     def _load_active_model(self) -> None:
@@ -110,18 +112,20 @@ class AppState:
         self.added = [f for f in self.added if f.source.kind != kind]
         self._save_added()
 
-    def remove_model(self) -> None:
-        """The files stay on disk, so the model can be restored without reading it again."""
-        if self.active_model is not None:
-            self.last_model, self.active_model = self.active_model, None
-            self._save_inputs()
-            self._load_active_model()
+    def _delete_stored_model(self, stored: str) -> None:
+        """Only imported copies are deleted. parts.json is set up by hand and used by the accuracy report."""
+        if stored.startswith("models/"):
+            (self.data_dir / stored).unlink(missing_ok=True)
 
-    def restore_model(self) -> None:
-        if self.active_model is None and self.last_model is not None:
-            self.active_model = self.last_model
-            self._save_inputs()
-            self._load_active_model()
+    def remove_model(self) -> None:
+        """Take the model out completely, along with the measurements taken on it."""
+        if self.active_model is None:
+            return
+        self._delete_stored_model(self.active_model)
+        self.active_model = None
+        self._save_inputs()
+        self._load_active_model()
+        self.remove_group(SourceKind.MEASUREMENT)
 
     def import_model(self, data: bytes | bytearray, name: str) -> None:
         """Replace the active model. Measurements belong to a model, so a different ship drops them."""
@@ -129,20 +133,17 @@ class AppState:
         if not parts:
             raise ValueError(f"No named parts could be read from {name}. The file may be a format we don't support.")
         digest = _digest(parts)
-        previous = self.model_digest or self._last_model_digest()
+        previous, replaced = self.model_digest, self.active_model
         stored = Path("models") / f"{digest}.json"
         (self.data_dir / "models").mkdir(parents=True, exist_ok=True)
         (self.data_dir / stored).write_text(json.dumps({"source": name, "parts": parts}), encoding="utf-8")
-        self.active_model, self.last_model = stored.as_posix(), None
+        self.active_model = stored.as_posix()
         self._save_inputs()
         self._load_active_model()
         if digest != previous:
             self.remove_group(SourceKind.MEASUREMENT)
-
-    def _last_model_digest(self) -> str:
-        if self.last_model is None:
-            return ""
-        return _digest(load_parts(self.data_dir / self.last_model)[1])
+            if replaced:
+                self._delete_stored_model(replaced)
 
     @property
     def has_view(self) -> bool:
@@ -158,10 +159,10 @@ class AppState:
 
         return {
             "model": {"name": self.model_name, "parts": self.model_parts, "has_view": self.has_view,
-                      "active": self.active_model is not None, "restorable": self.active_model is None and self.last_model is not None},
+                      "active": self.active_model is not None},
             "files": [{"name": name, "facts": sum(f.source.kind in FILE_KINDS and f.source.file == name for f in self.added)}
                       for name in self.file_names()],
-            "measurements": count(SourceKind.MEASUREMENT) if self.active_model is not None else 0,
+            "measurements": count(SourceKind.MEASUREMENT),
             "chat": count(SourceKind.CHAT),
         }
 
@@ -174,9 +175,7 @@ class AppState:
         profile = PROFILES.get(profile_id)
         if profile is None:
             raise HTTPException(404, f"Unknown ship profile: {profile_id}")
-        # A measurement came from the model, so it can't count while the model is removed.
-        added = [f for f in self.added if self.active_model is not None or f.source.kind != SourceKind.MEASUREMENT]
-        facts = self.model_facts + added + (demo_faults() if profile.use_demo_faults else [])
+        facts = self.model_facts + self.added + (demo_faults() if profile.use_demo_faults else [])
         return run(FactStore(facts), self.rules, profile)
 
 
@@ -248,12 +247,6 @@ def create_app(state: AppState | None = None) -> FastAPI:
     def remove_model(profile: str):
         before = state.result(profile)
         state.remove_model()
-        return rerun(before, profile)
-
-    @app.post("/api/inputs/model/restore")
-    def restore_model(profile: str):
-        before = state.result(profile)
-        state.restore_model()
         return rerun(before, profile)
 
     @app.post("/api/inputs/model")
