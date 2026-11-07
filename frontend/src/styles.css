@@ -331,3 +331,7 @@ select, input:not([type="file"]):not([type="range"]) {
   .profile { flex-wrap: wrap; }
   .profile select { max-width: 100%; }
 }
+
+.review { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.review p { width: 100%; margin: 0; font-size: 0.85rem; }
+.review input { width: 7rem; }

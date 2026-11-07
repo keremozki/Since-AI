@@ -1,0 +1,232 @@
+{
+  "synthetic": true,
+  "file": "syn_02_units_conflict.pdf",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 400,
+    "flag": "US",
+    "note": "Synthetic passenger ship; PVAG V201.1.1 scope (> 150 passengers) is met."
+  },
+  "limits": {
+    "PVAG-V404.2.3": "32 in (815 mm) min",
+    "PVAG-V403.5.1": "36 in (915 mm) min",
+    "PVAG-V405.2": "1:12 max"
+  },
+  "facts": [
+    {
+      "subject": "door-number:401",
+      "property": "clear_width",
+      "value": 815.0,
+      "unit": "mm",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D401 CL OPG 815 mm"
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:402",
+      "property": "clear_width",
+      "value": 800.0,
+      "unit": "mm",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D402 CL OPG 800 mm"
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:403",
+      "property": "clear_width",
+      "value": 32.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D403 CL OPG 2'-8\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:404",
+      "property": "clear_width",
+      "value": 30.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D404 CL OPG 2'-6\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:405",
+      "property": "clear_width",
+      "value": 31.875,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D405 CL OPG 31 7/8\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:406",
+      "property": "clear_width",
+      "value": 900.0,
+      "unit": "mm",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D406 CL OPG 900 mm"
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:407",
+      "property": "clear_width",
+      "value": 34.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D407 CL OPG 34\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:408",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "D408 CL OPG 36\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:407",
+      "property": "clear_width",
+      "value": 30.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, door schedule",
+        "quote": "D407    30\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "door-number:408",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, door schedule",
+        "quote": "D408    36\""
+      },
+      "confidence": "high",
+      "location": null
+    }
+  ],
+  "expected": [
+    {
+      "subject": "door-number:401",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant (815 mm is the rule's printed metric figure)",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:402",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:403",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant (32 in)",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:404",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:405",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "fail",
+      "violation": true,
+      "note": "INJECTED: too narrow by 1/8 in",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:406",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:407",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "conflict",
+      "violation": true,
+      "note": "INJECTED: schedule says 30 in -> conflict",
+      "app_has_check": true
+    },
+    {
+      "subject": "door-number:408",
+      "rule_id": "PVAG-V404.2.3",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": true
+    },
+    {
+      "subject": "corridor:C4-1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "note": "compliant",
+      "app_has_check": false,
+      "stated": "1000 mm"
+    }
+  ]
+}

@@ -11,13 +11,16 @@ from .store import FactStore
 STATUS_ORDER = {Status.FAIL: 0, Status.CONFLICT: 1, Status.CANT_TELL: 2, Status.PASS: 3}
 
 
-def run(store: FactStore, rules: list[Rule], profile: ShipProfile) -> RunResult:
+def run(store: FactStore, rules: list[Rule], profile: ShipProfile, gate=None) -> RunResult:
+    """`gate` is an optional ConfidenceGate. It can only turn a fail into can't tell."""
     scope = [decide_scope(rule, profile) for rule in rules]
     findings: list[Finding] = []
     for rule, decision in zip(rules, scope):
         if decision.applies:
             findings.extend(CHECKS[rule.check](rule, store, profile))
     findings.extend(check_consistency(store))
+    if gate is not None:
+        findings = gate.apply(findings, store)
     findings.sort(key=lambda f: (STATUS_ORDER[f.status], f.area, f.label))
     counts = Counter(f.status.value for f in findings)
     all_counts = {status.value: counts.get(status.value, 0) for status in Status}
@@ -68,6 +71,8 @@ def report_text(result: RunResult) -> str:
                 lines.append(f"  Required: {finding.required}")
             if finding.gap:
                 lines.append(f"  Gap: {finding.gap}")
+            if finding.gate_note:
+                lines.append(f"  Held back: {finding.gate_note}")
             if finding.question:
                 lines.append(f"  Needed: {finding.question}")
             for assumption in finding.assumptions:

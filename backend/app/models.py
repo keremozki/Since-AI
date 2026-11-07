@@ -60,6 +60,8 @@ class Fact(BaseModel):
     source: Source
     confidence: str = "high"
     location: Point | None = None
+    # How the value was read (reader, pairing distance, OCR, ...). Inputs for the confidence model.
+    meta: dict = Field(default_factory=dict)
 
     def key(self) -> tuple[str, str]:
         return self.subject, self.property
@@ -104,6 +106,15 @@ class Rule(BaseModel):
         return "Limit not yet confirmed against the rule text"
 
 
+class Evidence(BaseModel):
+    """What a numeric check compared, kept for the confidence model. Never sent to the browser."""
+
+    measured: float
+    limit: float
+    limit_unit: str = ""
+    facts: list[Fact] = Field(default_factory=list)
+
+
 class Finding(BaseModel):
     rule_id: str
     rule_title: str
@@ -124,6 +135,12 @@ class Finding(BaseModel):
     location: Point | None = None
     provisional: bool = False
     unconfirmed_label: str = ""
+    evidence: Evidence | None = Field(default=None, exclude=True)
+    # Set by the confidence gate. It can only turn a fail into can't tell, never the other way.
+    original_status: Status | None = None
+    p_real: float | None = None
+    gate_note: str = ""
+    reviewable: bool = False
 
 
 class ScopeDecision(BaseModel):

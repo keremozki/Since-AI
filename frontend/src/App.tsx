@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, Finding, Inputs, Profile, RunResult, Spend, UpdateResponse } from "./api";
+import { api, Decision, Finding, Inputs, Profile, RunResult, Spend, UpdateResponse } from "./api";
 import Assistant, { ChatLine } from "./Assistant";
 import FindingDetail from "./FindingDetail";
 import InputsPanel from "./InputsPanel";
@@ -59,6 +59,20 @@ export default function App() {
     applyUpdate(update, intro);
   }, [applyUpdate]);
 
+  const review = useCallback(async (finding: Finding, decision: Decision, value?: number, unit?: string) => {
+    setError("");
+    try {
+      const update = await api.feedback(profileId, { rule_id: finding.rule_id, subject: finding.subject, decision,
+                                                     corrected_value: value, corrected_unit: unit });
+      applyUpdate(update, "");
+      const retrained = update.retrained ? " The confidence model was retrained." : "";
+      setLines((current) => [...current, { role: "system", text: `Review saved for ${finding.label}: ${decision}.${retrained}` }]);
+      setTab("assistant");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The review couldn't be saved.");
+    }
+  }, [profileId, applyUpdate]);
+
   const startOver = async () => {
     await api.reset();
     setLines([]);
@@ -108,7 +122,7 @@ export default function App() {
                 onSaved={(update) => { setMeasuring(false); applyUpdate(update, "Measurement saved."); setTab("assistant"); }} />
             )}
           </ShipViewer>
-          {selected && <FindingDetail finding={selected} onClose={closeDetail} onAnswer={answer} />}
+          {selected && <FindingDetail key={`${selected.rule_id}|${selected.subject}`} finding={selected} onClose={closeDetail} onAnswer={answer} onReview={review} />}
         </div>
         <aside className="side">
           <div className="tabs" role="tablist" aria-label="Side panel">

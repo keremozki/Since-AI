@@ -15,3 +15,10 @@ __pycache__/
 # Node
 node_modules/
 dist/
+
+# Test data: unclear-licence files and anything derived from them stay local
+data/restricted/
+data/reports/*.png
+data/reports/cache/
+# Large raw files: linked in data/sources.md instead of committed
+data/raw/lusitania_deck_plans_ccbysa.jpg

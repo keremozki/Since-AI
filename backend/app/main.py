@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import chat as chat_module
+from . import confidence
 from . import ingest, nwd
 from .checks import describe_fact
 from .engine import report_text, run
@@ -57,6 +58,9 @@ class AppState:
         self.history: list[dict] = []
         # Checking quotes means reading every rule text, so do it once at startup.
         self.rules = load_rules(rules_file, rule_texts_dir)
+        self.gate = confidence.ConfidenceGate(
+            data_dir / "confidence", tau=float(os.environ.get("CONFIDENCE_TAU", confidence.TAU)),
+            allow_synthetic=os.environ.get("CONFIDENCE_ALLOW_SYNTHETIC") == "1")
 
     def _load_inputs(self) -> None:
         if self.inputs_file.exists():
@@ -175,13 +179,26 @@ class AppState:
         profile = PROFILES.get(profile_id)
         if profile is None:
             raise HTTPException(404, f"Unknown ship profile: {profile_id}")
-        facts = self.model_facts + self.added + (demo_faults() if profile.use_demo_faults else [])
-        return run(FactStore(facts), self.rules, profile)
+        return run(self.store(profile_id), self.rules, profile, gate=self.gate)
+
+    def store(self, profile_id: str) -> FactStore:
+        profile = PROFILES[profile_id]
+        return FactStore(self.model_facts + self.added + (demo_faults() if profile.use_demo_faults else []))
 
 
 class ChatRequest(BaseModel):
     profile: str
     message: str
+
+
+class FeedbackRequest(BaseModel):
+    profile: str
+    rule_id: str
+    subject: str
+    decision: str  # accept, reject, or correct
+    corrected_value: float | None = None
+    corrected_unit: str = ""
+    note: str = ""
 
 
 class MeasureRequest(BaseModel):
@@ -306,6 +323,27 @@ def create_app(state: AppState | None = None) -> FastAPI:
         state.add_file(name)
         state.add_facts(fresh)
         return rerun(before, profile, recorded=fresh, cached=cached, dropped=dropped)
+
+    @app.get("/api/confidence")
+    def confidence_status():
+        return state.gate.status()
+
+    @app.post("/api/feedback")
+    def feedback(request: FeedbackRequest):
+        """An engineer's verdict on a fail. These are the only labels the model ever learns from."""
+        before = state.result(request.profile)
+        finding = next((f for f in before.findings if f.rule_id == request.rule_id and f.subject == request.subject
+                        and f.reviewable), None)
+        if finding is None:
+            raise HTTPException(404, "No reviewable fail matches that rule and subject.")
+        try:
+            row = confidence.make_label(finding, state.store(request.profile), request.decision,
+                                        corrected_value=request.corrected_value,
+                                        corrected_unit=request.corrected_unit, note=request.note)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        retrained = state.gate.record(row)
+        return rerun(before, request.profile, retrained=retrained, confidence=state.gate.status())
 
     @app.post("/api/measure")
     def measure(profile: str, request: MeasureRequest):

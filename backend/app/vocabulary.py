@@ -9,6 +9,7 @@ from .units import is_length_unit
 # (subject pattern, property, kind, meaning). Kind: "length", "number", or "text".
 VOCABULARY = [
     (r"door-number:\d+", "clear_width", "length", "clear opening width of the door with this number"),
+    (r"door-number:\d+", "shown_on", "text", "sheet or page where the door is tagged, when no width is written for it"),
     (r"door-type:.+", "clear_width", "length", "clear opening width for a door part type, by its exact name"),
     (r"liferaft", "capacity_persons", "number", "rated capacity of each liferaft, in persons"),
     (r"ship", "persons_on_board", "number", "total persons the ship carries, only if stated as one total"),

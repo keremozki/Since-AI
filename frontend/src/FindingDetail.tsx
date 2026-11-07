@@ -1,12 +1,16 @@
-import { useEffect } from "react";
-import { Finding } from "./api";
+import { useEffect, useState } from "react";
+import { Decision, Finding } from "./api";
 import { STATUS_LABEL, StatusIcon } from "./shared";
 
-export default function FindingDetail({ finding, onClose, onAnswer }: {
+export default function FindingDetail({ finding, onClose, onAnswer, onReview }: {
   finding: Finding;
   onClose: () => void;
   onAnswer: (question: string) => void;
+  onReview: (finding: Finding, decision: Decision, value?: number, unit?: string) => void;
 }) {
+  const [value, setValue] = useState("");
+  const [unit, setUnit] = useState("mm");
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -18,6 +22,7 @@ export default function FindingDetail({ finding, onClose, onAnswer }: {
     ["Rule", finding.rule_source],
     ["Why it applies", finding.why],
     ["Confidence", finding.confidence.charAt(0).toUpperCase() + finding.confidence.slice(1)],
+    ["P(real fail)", finding.p_real !== null ? finding.p_real.toFixed(2) : ""],
   ];
 
   return (
@@ -45,6 +50,22 @@ export default function FindingDetail({ finding, onClose, onAnswer }: {
         </div>
       )}
       {finding.unconfirmed_label && <p className="unconfirmed-note">{finding.unconfirmed_label}.</p>}
+      {finding.gate_note && <p className="unconfirmed-note">{finding.gate_note}</p>}
+
+      {finding.reviewable && (
+        <div className="review" aria-label="Engineer review">
+          <p>Is this fail real? Your answer trains the confidence model.</p>
+          <button type="button" onClick={() => onReview(finding, "accept")}>Accept: real fail</button>
+          <button type="button" onClick={() => onReview(finding, "reject")}>Reject: misread</button>
+          <span>
+            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Correct value" aria-label="Correct value" />
+            <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
+              <option>mm</option><option>in</option><option>m</option><option>ft</option>
+            </select>
+            <button type="button" disabled={!value} onClick={() => { onReview(finding, "correct", Number(value), unit); setValue(""); }}>Correct</button>
+          </span>
+        </div>
+      )}
 
       <dl>
         {rows.filter(([, value]) => value).map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
