@@ -22,6 +22,30 @@ const MAX_PIXEL_RATIO = 1.5;
 const MAX_DECODE_WORKERS = 4;
 const CAMERA_NEAR_IN = 10;
 const CAMERA_FAR_IN = 20000;
+// How the outer shell of the ship is found: see buildShell.
+const SHELL_VIEWS = 32;
+const SHELL_RESOLUTION = 1024;
+const SHELL_RADIUS_IN = 1500;
+const SHELL_START_DELAY_MS = 800;
+const SHELL_PAUSE_MS = 30;
+const SETTLE_MS = 180;
+const VISIBLE_MOTION = 0.0005;
+const SHIP_BOUNDS = new THREE.Box3(new THREE.Vector3(-2400, -340, -20), new THREE.Vector3(260, 340, 1150));
+
+const ID_VERTEX_SHADER = `
+  uniform uint idOffset;
+  flat out highp uint triangleId;
+  void main() {
+    triangleId = uint(gl_VertexID) + idOffset;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }`;
+const ID_FRAGMENT_SHADER = `
+  precision highp float;
+  flat in highp uint triangleId;
+  out vec4 idColour;
+  void main() {
+    idColour = vec4(float(triangleId & 255u), float((triangleId >> 8) & 255u), float((triangleId >> 16) & 255u), 255.0) / 255.0;
+  }`;
 const MARKER_SIZE = 0.016;
 const MARKER_SIZE_SELECTED = 0.04;
 const MODEL_MUTE = 0.75;
@@ -175,6 +199,12 @@ class ViewerCore {
   private flight: { from: THREE.Vector3; to: THREE.Vector3; fromT: THREE.Vector3; toT: THREE.Vector3; start: number } | null = null;
   private frame = 0;
   private needsRender = true;
+  private shellMeshes: THREE.Mesh[] = [];
+  private shellStats: { full: number; shell: number } | null = null;
+  private moving = false;
+  private pointerHeld = false;
+  private lastMove = 0;
+  private lastCameraPosition = new THREE.Vector3();
   private disposed = false;
   private pointerDown = { x: 0, y: 0 };
   private observer: ResizeObserver;
@@ -197,7 +227,7 @@ class ViewerCore {
     this.controls.dampingFactor = 0.12;
     this.controls.minDistance = 30;
     this.controls.maxDistance = CAMERA_FAR_IN / 2;
-    this.controls.addEventListener("change", () => this.invalidate());
+    this.controls.addEventListener("change", () => this.onCameraMoved());
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a97a3, 2.2));
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(1500, -2500, 4000);
@@ -208,13 +238,21 @@ class ViewerCore {
     this.observer.observe(host);
     this.resize();
     const element = this.renderer.domElement;
-    element.addEventListener("pointerdown", (e) => { this.pointerDown = { x: e.clientX, y: e.clientY }; });
-    element.addEventListener("pointerup", (e) => this.handleClick(e));
+    element.addEventListener("pointerdown", (e) => {
+      this.pointerDown = { x: e.clientX, y: e.clientY };
+      this.pointerHeld = true;
+    });
+    element.addEventListener("pointerup", (e) => {
+      this.pointerHeld = false;
+      this.handleClick(e);
+    });
+    element.addEventListener("pointercancel", () => { this.pointerHeld = false; });
     const loop = () => {
       if (this.disposed) return;
       this.frame = requestAnimationFrame(loop);
       this.updateFlight();
       this.controls.update();
+      if (this.moving && performance.now() - this.lastMove > SETTLE_MS) this.settle();
       // Drawing millions of triangles is the costly part, so only draw when something changed.
       if (this.needsRender) {
         this.needsRender = false;
@@ -229,6 +267,139 @@ class ViewerCore {
     this.needsRender = true;
   }
 
+  private onCameraMoved() {
+    // The last moments of a coasting turn are too small to see, so they don't count as moving.
+    const step = this.camera.position.distanceTo(this.lastCameraPosition);
+    this.lastCameraPosition.copy(this.camera.position);
+    if (step > this.camera.position.distanceTo(this.controls.target) * VISIBLE_MOTION) {
+      this.moving = true;
+      this.lastMove = performance.now();
+    }
+    this.applyVisibility();
+  }
+
+  private settle() {
+    this.moving = false;
+    // End any remaining coasting, so that the full model doesn't redraw for movement nobody can see.
+    this.controls.enableDamping = false;
+    this.controls.update();
+    this.controls.enableDamping = true;
+    this.applyVisibility();
+  }
+
+  /** Moving and looking from outside draws only the shell. Otherwise, the full model is drawn. */
+  private applyVisibility() {
+    const sliced = this.clip.constant < FULL_CUT;
+    const useShell = this.moving && this.modelVisible && this.shellMeshes.length > 0 && !sliced
+      && !SHIP_BOUNDS.containsPoint(this.camera.position);
+    for (const mesh of this.meshes) mesh.visible = this.modelVisible && !useShell && mesh.userData.category !== "Insulation";
+    for (const mesh of this.shellMeshes) mesh.visible = useShell;
+    this.invalidate();
+  }
+
+  /**
+   * Finds every triangle that can be seen from outside the ship, by looking at it from all around
+   * and noting which triangles reach the screen. Anything else is hidden behind the hull.
+   * Each view runs separately, so the page stays responsive. If this fails, the full model is used.
+   */
+  private async buildShell() {
+    const target = new THREE.WebGLRenderTarget(SHELL_RESOLUTION, SHELL_RESOLUTION, { depthBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    const scene = new THREE.Scene();
+    const sources = this.meshes.filter((mesh) => mesh.userData.category !== "Insulation");
+    const offsets: number[] = [];
+    let idCount = 1;
+    for (const source of sources) {
+      offsets.push(idCount);
+      const material = new THREE.ShaderMaterial({
+        glslVersion: THREE.GLSL3,
+        vertexShader: ID_VERTEX_SHADER,
+        fragmentShader: ID_FRAGMENT_SHADER,
+        uniforms: { idOffset: { value: idCount } },
+        side: THREE.DoubleSide,
+        blending: THREE.NoBlending,
+      });
+      const mesh = new THREE.Mesh(source.geometry, material);
+      mesh.frustumCulled = false;
+      mesh.scale.copy(source.scale);
+      mesh.position.copy(source.position);
+      scene.add(mesh);
+      idCount += source.geometry.getAttribute("position").count;
+    }
+    const camera = new THREE.OrthographicCamera(-SHELL_RADIUS_IN, SHELL_RADIUS_IN, SHELL_RADIUS_IN, -SHELL_RADIUS_IN, 10, SHELL_RADIUS_IN * 6);
+    const seen = new Uint8Array(idCount);
+    const pixels = new Uint8Array(SHELL_RESOLUTION * SHELL_RESOLUTION * 4);
+    const clearColour = new THREE.Color();
+    this.renderer.getClearColor(clearColour);
+    const clearAlpha = this.renderer.getClearAlpha();
+    try {
+      // Graphics drivers can take seconds to prepare a shader, which would freeze the page.
+      await this.renderer.compileAsync(scene, camera);
+      for (let view = 0; view < SHELL_VIEWS; view++) {
+        // Never compete with the engineer: wait until the ship is still.
+        do {
+          await new Promise((resolve) => setTimeout(resolve, SHELL_PAUSE_MS));
+          if (this.disposed) return;
+        } while (this.pointerHeld || this.moving);
+        // Evenly spread directions on a sphere.
+        const z = 1 - (2 * (view + 0.5)) / SHELL_VIEWS;
+        const ring = Math.sqrt(1 - z * z);
+        const angle = view * Math.PI * (3 - Math.sqrt(5));
+        const direction = new THREE.Vector3(Math.cos(angle) * ring, Math.sin(angle) * ring, z);
+        camera.position.copy(SHIP_CENTRE).addScaledVector(direction, SHELL_RADIUS_IN * 3);
+        camera.up.set(0, Math.abs(z) > 0.99 ? 1 : 0, Math.abs(z) > 0.99 ? 0 : 1);
+        camera.lookAt(SHIP_CENTRE);
+        this.renderer.setRenderTarget(target);
+        this.renderer.setClearColor(0x000000, 0);
+        this.renderer.clear();
+        this.renderer.render(scene, camera);
+        this.renderer.readRenderTargetPixels(target, 0, 0, SHELL_RESOLUTION, SHELL_RESOLUTION, pixels);
+        // Hand the screen back right away, or the view on screen stops updating between these steps.
+        this.renderer.setRenderTarget(null);
+        this.renderer.setClearColor(clearColour, clearAlpha);
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i + 3]) seen[pixels[i] | (pixels[i + 1] << 8) | (pixels[i + 2] << 16)] = 1;
+        }
+      }
+      let full = 0, shell = 0;
+      sources.forEach((source, sourceIndex) => {
+        const offset = offsets[sourceIndex];
+        const all = source.geometry.getIndex()!.array as Uint32Array;
+        const kept = new Uint32Array(all.length);
+        let count = 0;
+        // A triangle's colour comes from its last corner, so that corner names the triangle.
+        for (let i = 0; i < all.length; i += 3) {
+          if (seen[all[i + 2] + offset]) {
+            kept[count++] = all[i];
+            kept[count++] = all[i + 1];
+            kept[count++] = all[i + 2];
+          }
+        }
+        full += all.length / 3;
+        shell += count / 3;
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", source.geometry.getAttribute("position"));
+        geometry.setAttribute("color", source.geometry.getAttribute("color"));
+        geometry.setIndex(new THREE.BufferAttribute(kept.slice(0, count), 1));
+        const mesh = new THREE.Mesh(geometry, source.material);
+        mesh.frustumCulled = false;
+        mesh.scale.copy(source.scale);
+        mesh.position.copy(source.position);
+        mesh.visible = false;
+        this.scene.add(mesh);
+        this.shellMeshes.push(mesh);
+      });
+      this.shellStats = { full, shell };
+    } catch {
+      this.shellMeshes = [];
+    } finally {
+      this.renderer.setRenderTarget(null);
+      this.renderer.setClearColor(clearColour, clearAlpha);
+      target.dispose();
+      scene.traverse((object) => { if (object instanceof THREE.Mesh) (object.material as THREE.Material).dispose(); });
+      this.invalidate();
+    }
+  }
+
   /** The decoded model stays in memory while hidden, so that restoring it is instant. */
   setModelVisible(visible: boolean) {
     this.modelVisible = visible;
@@ -237,8 +408,7 @@ class ViewerCore {
       this.events.status("Loading the 3D model");
       this.load();
     }
-    for (const mesh of this.meshes) mesh.visible = visible && mesh.userData.category !== "Insulation";
-    this.invalidate();
+    this.applyVisibility();
   }
 
   private async load() {
@@ -299,6 +469,7 @@ class ViewerCore {
         this.geometries.push({ name: category.name, geometry });
       }
       this.events.status("");
+      setTimeout(() => this.buildShell(), SHELL_START_DELAY_MS);
     } catch {
       this.events.status("3D model not loaded. Set up ship-data as described in the README. Checks still work.");
     }
@@ -335,7 +506,7 @@ class ViewerCore {
 
   setCut(height: number) {
     this.clip.constant = height;
-    this.invalidate();
+    this.applyVisibility();
   }
 
   home() {
