@@ -1,6 +1,7 @@
 """The fixed list of facts that AI may report. Anything else is dropped by code."""
 from __future__ import annotations
 
+import math
 import re
 
 from .models import Fact, Source
@@ -75,8 +76,11 @@ def to_fact(raw: dict, source_template: Source) -> Fact | None:
         value = number
         if value is None or isinstance(value, bool):
             return None
-        value = float(value)
-        if value <= 0:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(value) or value <= 0:
             return None
     if kind == "length" and not is_length_unit(unit):
         return None

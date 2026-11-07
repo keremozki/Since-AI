@@ -10,7 +10,8 @@ from typing import Callable
 
 from .models import Evidence, Fact, Finding, Rule, ShipProfile, Status
 from .store import FactStore
-from .units import fmt_length, is_length_unit, to_mm
+from .units import fmt_length, is_length_unit, length_problem, to_mm
+from .vocabulary import VOCABULARY
 
 CONSISTENCY_RULE = Rule(
     id="CROSS-CHECK",
@@ -25,6 +26,54 @@ LENGTH_TOLERANCE_MM = 10.0
 # Unit conversion in floating point: 4 in / 48 in becomes 101.6 mm / 1219.2 mm and can land a hair
 # above 1/12. This only absorbs rounding error; it is far below any value a drawing can state.
 FLOAT_SLACK = 1e-9
+
+
+INPUT_RULE = Rule(
+    id="INPUT-CHECK",
+    title="Input value can be used",
+    area="Consistency",
+    source="Input validation before the checks",
+    check="input_values",
+    verified=True,
+)
+# Properties that must be a positive length, and numbers that can't be negative (a count can be 0).
+LENGTH_PROPERTIES = {p for _s, p, kind, _m in VOCABULARY if kind == "length"} | {"tread_length", "height_above_baseline"}
+NUMBER_PROPERTIES = {p for _s, p, kind, _m in VOCABULARY if kind == "number"}
+POSITIVE_NUMBERS = {"slope_run_per_rise", "capacity_persons", "persons_on_board", "time_minutes", "lightship_weight"}
+
+
+def unusable_facts(store: FactStore) -> list[tuple[Fact, str]]:
+    """Facts no check may use: a length with no or an unknown unit, zero, negative, or not a number.
+
+    They come from chat, measurements, saved files, or a misread. Using them could make a made-up
+    fail or a false pass, so they are taken out and reported as can't tell with the reason.
+    """
+    bad = []
+    for fact in store.facts:
+        if fact.property in LENGTH_PROPERTIES:
+            problem = length_problem(fact.value, fact.unit)
+        elif fact.property in NUMBER_PROPERTIES:
+            value = fact.value
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value or value in (float("inf"), float("-inf")):
+                problem = f"the value {value!r} is not a number"
+            elif value < 0 or (value == 0 and fact.property in POSITIVE_NUMBERS):
+                problem = f"{value:g} is not possible here"
+            else:
+                problem = ""
+        else:
+            problem = ""
+        if problem:
+            bad.append((fact, problem))
+    return bad
+
+
+def input_findings(bad: list[tuple[Fact, str]]) -> list[Finding]:
+    return [_finding(INPUT_RULE, Status.CANT_TELL, fact.subject, f"{fact.subject} {fact.property.replace('_', ' ')}",
+                     measured=f"Not used: {problem}.", required="A positive number with a unit (mm, cm, m, in, ft)",
+                     why="A value that can't be right is never used to pass or fail a check.",
+                     sources=_sources(fact), location=fact.location,
+                     question=f"What is the correct {fact.property.replace('_', ' ')} of {fact.subject}?")
+            for fact, problem in bad]
 
 
 def _finding(rule: Rule, status: Status, subject: str, label: str, **fields) -> Finding:

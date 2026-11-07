@@ -17,12 +17,13 @@ from . import chat as chat_module
 from . import confidence
 from . import ingest, lessons, nwd
 from .engine import report_text, run
-from .llm import DEFAULT_CAP_USD, BudgetExceeded, Claude, Ledger, ModelRefused, load_env
+from .llm import DEFAULT_CAP_USD, AIUnavailable, BudgetExceeded, Claude, Ledger, ModelRefused, env_float, load_env
 from .models import Fact, Point, RunResult, Source, SourceKind, Status
 from .parts import facts_from_parts, load_parts
 from .profiles import PROFILES, demo_faults
 from .rules import load_rules
 from .store import FactStore
+from .units import is_length_unit
 from .vocabulary import VOCABULARY
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -54,13 +55,13 @@ class AppState:
         self.added: list[Fact] = []
         if self.added_file.exists():
             self.added = [Fact(**raw) for raw in json.loads(self.added_file.read_text(encoding="utf-8"))]
-        self.ledger = Ledger(data_dir / "usage.json", float(os.environ.get("BUDGET_USD", DEFAULT_CAP_USD)))
+        self.ledger = Ledger(data_dir / "usage.json", env_float("BUDGET_USD", DEFAULT_CAP_USD))
         self.claude = claude or Claude(self.ledger)
         self.history: list[dict] = []
         # Checking quotes means reading every rule text, so do it once at startup.
         self.rules = load_rules(rules_file, rule_texts_dir)
         self.gate = confidence.ConfidenceGate(
-            data_dir / "confidence", tau=float(os.environ.get("CONFIDENCE_TAU", confidence.TAU)),
+            data_dir / "confidence", tau=env_float("CONFIDENCE_TAU", confidence.TAU),
             allow_synthetic=os.environ.get("CONFIDENCE_ALLOW_SYNTHETIC") == "1")
 
     def _load_inputs(self) -> None:
@@ -319,9 +320,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @app.post("/api/chat")
     def chat(request: ChatRequest):
         before = state.result(request.profile)
+        if not request.message.strip():
+            raise HTTPException(400, "The message is empty.")
         try:
             reply, facts, dropped = chat_module.respond(state.claude, before, state.history, request.message)
-        except (BudgetExceeded, ModelRefused) as error:
+        except (BudgetExceeded, ModelRefused, AIUnavailable) as error:
             raise HTTPException(503, str(error)) from error
         state.history += [{"role": "engineer", "text": request.message}, {"role": "assistant", "text": reply}]
         state.add_facts(facts)
@@ -330,13 +333,18 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @app.post("/api/upload")
     async def upload(profile: str = Form(...), file: UploadFile = File(...), pages: str = Form("")):
         before = state.result(profile)
-        name = file.filename or "upload"
-        page_list = [int(p) for p in pages.replace(" ", "").split(",") if p.isdigit()] or None
-        data = await file.read()
+        name = Path(file.filename or "upload").name
+        data = await file.read(ingest.MAX_UPLOAD_BYTES + 1)  # never hold more than the limit in memory
         try:
+            page_list = ingest.parse_pages(pages)
             facts, cached, dropped = ingest.read_file(state.claude, state.data_dir / "extract-cache",
                                                       name, data, page_list, lessons=state.lessons_text())
-        except (BudgetExceeded, ModelRefused, ingest.TooManyPages, ValueError) as error:
+        except ingest.FileTooLarge as error:
+            raise HTTPException(413, str(error)) from error
+        except (AIUnavailable, BudgetExceeded) as error:
+            # Missing key, rejected key, no answer after a retry, or the cap: the rest of the app keeps working.
+            raise HTTPException(503, str(error)) from error
+        except (ModelRefused, ingest.TooManyPages, ValueError) as error:
             raise HTTPException(400, str(error)) from error
         # Keep the file, so a reviewer can see the part of the drawing a value came from.
         (state.data_dir / "uploads").mkdir(parents=True, exist_ok=True)
@@ -374,11 +382,21 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @app.post("/api/feedback")
     def feedback(request: FeedbackRequest):
         """An engineer's answer: was this value read correctly? These are the only labels the model learns from."""
+        if request.decision not in confidence.DECISIONS:
+            raise HTTPException(422, f"Unknown decision: {request.decision!r}. Use accept, reject, or unsure.")
+        if request.corrected_value is not None and not (request.corrected_value > 0 and is_length_unit(request.corrected_unit)):
+            raise HTTPException(400, "A corrected value must be a positive length with a unit: mm, cm, m, in, or ft.")
         before = state.result(request.profile)
         finding = next((f for f in before.findings if f.rule_id == request.rule_id and f.subject == request.subject
                         and f.reviewable), None)
         if finding is None:
-            raise HTTPException(404, "No reviewable fail matches that rule and subject.")
+            answered = next((r for r in state.gate.pool.rows() if r.get("rule_id") == request.rule_id
+                             and r.get("subject") == request.subject), None)
+            if answered is not None:
+                raise HTTPException(409, f"This finding was already answered ({answered['decision']}) and is no longer "
+                                         "open for review. Undo that answer first to answer again.")
+            raise HTTPException(404, f"No reviewable fail for rule {request.rule_id} and {request.subject}. "
+                                     "Run the checks again: the finding may have changed.")
         try:
             row = confidence.make_label(finding, state.store(request.profile), request.decision,
                                         corrected_value=request.corrected_value,
@@ -413,6 +431,10 @@ def create_app(state: AppState | None = None) -> FastAPI:
     def measure(profile: str, request: MeasureRequest):
         if state.active_model is None:
             raise HTTPException(400, "There's no 3D model to measure.")
+        if not is_length_unit(request.unit):
+            raise HTTPException(400, f"Unknown unit {request.unit!r}. Use mm, cm, m, in, or ft.")
+        if not request.value > 0:
+            raise HTTPException(400, f"A measured length must be more than 0; got {request.value:g}.")
         before = state.result(profile)
         if not any(p == request.property for _, p, kind, _m in VOCABULARY if kind == "length"):
             raise HTTPException(400, f"Not a measurable property: {request.property}")

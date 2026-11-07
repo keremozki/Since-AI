@@ -11,7 +11,7 @@ from pathlib import Path
 import pymupdf
 
 from . import drawing
-from .llm import Claude
+from .llm import NO_KEY, AIUnavailable, Claude
 from .models import Fact, Source, SourceKind
 from .units import is_length_unit, to_mm
 from .vocabulary import FACT_SCHEMA, to_fact, vocabulary_text
@@ -21,6 +21,12 @@ MAX_IMAGE_EDGE = 1568
 MAX_PDF_IMAGE_PAGES = 6
 MIN_TEXT_CHARS_PER_PAGE = 50
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+TEXT_TYPES = {".md", ".txt"}
+# Upload limits. A deck GA set is a few sheets; these stop a wrong file from tying up the reader.
+MAX_UPLOAD_MB = 50
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+MAX_PDF_PAGES = 200
+SUPPORTED = "Use PDF, PNG, JPG, WEBP, MD, or TXT."
 
 SYSTEM = f"""You read ship design documents and drawings for a compliance tool.
 Report only values that are written or dimensioned in the input. Never estimate, scale from the
@@ -45,6 +51,73 @@ RESPONSE_SCHEMA = {
 
 class TooManyPages(Exception):
     pass
+
+
+class FileProblem(ValueError):
+    """The uploaded file can't be used as it is. The message says what is wrong and what to do."""
+
+
+class FileTooLarge(FileProblem):
+    pass
+
+
+class NeedsAPIKey(AIUnavailable):
+    """The code reader found nothing, and the AI reader that could try needs an API key."""
+
+
+def parse_pages(text: str) -> list[int] | None:
+    """Page choice like "1,3,5-7". Empty means all pages."""
+    pages: list[int] = []
+    for token in (text or "").replace(" ", "").split(","):
+        if not token:
+            continue
+        first, _, last = token.partition("-")
+        if not first.isdigit() or (last and not last.isdigit()) or int(first) < 1 or (last and int(last) < int(first)):
+            raise FileProblem(f"Pages must be numbers like 1,3,5-7 (counting from 1); {token!r} isn't one.")
+        pages += list(range(int(first), int(last or first) + 1))
+    return sorted(set(pages)) or None
+
+
+def check_file(filename: str, data: bytes, pages: list[int] | None = None) -> None:
+    """Refuse a file that can't be read, with a short reason, before any reader or API call."""
+    suffix = Path(filename).suffix.lower()
+    if not data:
+        raise FileProblem(f"{filename} is empty (0 bytes). Upload the file again.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise FileTooLarge(f"{filename} is {len(data) / 1024 / 1024:.0f} MB; the limit is {MAX_UPLOAD_MB} MB. "
+                           "Upload only the sheets you need.")
+    if suffix not in {".pdf", *IMAGE_TYPES, *TEXT_TYPES}:
+        raise FileProblem(f"Unsupported file type: {suffix or filename}. {SUPPORTED}")
+    if suffix != ".pdf":
+        return  # images and text go to the AI reader, which reports its own errors
+    if b"%PDF-" not in data[:1024]:
+        kind = "text" if _looks_like_text(data) else "non-PDF"
+        raise FileProblem(f"{filename} isn't a PDF: it has no PDF header, so it may be a renamed {kind} file. "
+                          "Export the drawing as PDF and upload that.")
+    try:
+        document = pymupdf.open(stream=data, filetype="pdf")
+    except Exception as error:  # pymupdf raises several types for damaged files
+        raise FileProblem(f"{filename} is damaged and can't be opened ({error}). Re-export or download it again.") from error
+    if document.needs_pass:
+        raise FileProblem(f"{filename} is password-protected. Save a copy without a password and upload that.")
+    count = len(document)
+    if count == 0:
+        raise FileProblem(f"{filename} has no pages.")
+    if pages:
+        outside = [n for n in pages if n > count]
+        if outside:
+            raise FileProblem(f"Page {outside[0]} doesn't exist: {filename} has {count} page(s).")
+    elif count > MAX_PDF_PAGES:
+        raise FileTooLarge(f"{filename} has {count} pages; the limit is {MAX_PDF_PAGES} per upload. "
+                           "Choose pages (like 1-20) or split the file.")
+
+
+def _looks_like_text(data: bytes) -> bool:
+    try:
+        data[:512].decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def _image_block(data: bytes, media_type: str) -> dict:
@@ -85,7 +158,7 @@ def build_content(filename: str, data: bytes, pages: list[int] | None = None) ->
     elif suffix in (".md", ".txt"):
         blocks = [{"type": "text", "text": data.decode("utf-8", errors="replace")}]
     else:
-        raise ValueError(f"Unsupported file type: {suffix or filename}. Use PDF, PNG, JPG, WEBP, MD, or TXT.")
+        raise FileProblem(f"Unsupported file type: {suffix or filename}. {SUPPORTED}")
     return blocks + [{"type": "text", "text": f"File name: {filename}. Report the facts it states."}]
 
 
@@ -143,17 +216,31 @@ def read_file(claude: Claude, cache_dir: Path, filename: str, data: bytes,
     nothing, or on every file when CROSS_CHECK_READERS=1, so the two readers can confirm each other.
     `lessons` (app.lessons.as_text) are engineers' past corrections, shown to the AI reader.
     """
+    check_file(filename, data, pages)
     vector: list[Fact] = []
+    scanned = True
     if Path(filename).suffix.lower() == ".pdf":
-        vector = drawing.read_pdf(data, filename, pages).facts
+        try:
+            read = drawing.read_pdf(data, filename, pages)
+        except Exception as error:  # a file that opens but breaks while reading is still a bad file, not a crash
+            raise FileProblem(f"{filename} couldn't be read ({error}). Re-export it as PDF.") from error
+        vector = read.facts
+        scanned = all(page["text_chars"] < MIN_TEXT_CHARS_PER_PAGE or page["ocr"] for page in read.pages)
     cross_check = os.environ.get("CROSS_CHECK_READERS") == "1" and os.environ.get("ANTHROPIC_API_KEY")
     if vector and not cross_check:
         return vector, False, 0
-    no_ai = isinstance(claude, Claude) and claude._client is None and not os.environ.get("ANTHROPIC_API_KEY")
+    no_ai = isinstance(claude, Claude) and not claude.available
     if no_ai:
         if vector:
             return vector, False, 0
-        raise ValueError(f"The drawing reader found no values in {filename}, and no API key is set for the AI reader.")
+        suffix = Path(filename).suffix.lower()
+        if suffix != ".pdf":
+            raise NeedsAPIKey(f"{filename}: images and text files are read by the AI reader only. {NO_KEY}")
+        if scanned:
+            raise NeedsAPIKey(f"{filename} has no text layer (a scanned drawing?), so the code reader can't read it. "
+                              f"Scanned drawings need the AI reader. {NO_KEY}")
+        raise NeedsAPIKey(f"The code reader found no door, corridor, ramp, or ship values in {filename}. "
+                          f"The AI reader could look further. {NO_KEY}")
     ai, cached, dropped = _read_with_ai(claude, cache_dir, filename, data, pages, lessons)
     return merge_readers(vector, ai), cached, dropped
 
@@ -171,7 +258,7 @@ def _read_with_ai(claude: Claude, cache_dir: Path, filename: str, data: bytes,
         if lessons:
             content = [{"type": "text", "text": lessons}] + content
         result = claude.structured(SYSTEM, content, RESPONSE_SCHEMA, effort="medium")
-        raw_facts = result["facts"]
+        raw_facts = result.get("facts") or []
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(json.dumps(raw_facts), encoding="utf-8")
     is_image = Path(filename).suffix.lower() in IMAGE_TYPES

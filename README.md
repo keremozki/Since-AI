@@ -115,15 +115,27 @@ file stands in for the engineer), and compares the other half read with and with
 ## Reading vector PDFs with code
 
 `backend/app/drawing.py` reads a PDF's text layer with no API: door tags, clear widths in any unit
-(`2'-8"`, `31 7/8"`, `815 mm`), door schedules, and table rows, even rotated. It never scales a size off
-the lines. Each fact records how it was read (pairing distance, ambiguity, OCR, scale), which the
+(`2'-8"`, `31 7/8"`, `815 mm`), door schedules, and table rows, even rotated. It also reads corridor
+clear widths (label, next line, or corridor schedule) and ramp slopes (`1:12`, or rise and run). For
+corridors and ramps, rotated value text and numbers with no unit are not used: the result is can't tell.
+It never scales a size off the lines. Each fact records how it was read (pairing distance, ambiguity, OCR, scale), which the
 confidence model uses. A reading with low confidence never passes. The AI reader runs only when code
 finds nothing, or on every file with `CROSS_CHECK_READERS=1`.
 
 ```bash
 .venv/Scripts/python tools/validate_data.py        # reader and checks vs every truth file in data/
 .venv/Scripts/python tools/reader_benchmark.py     # hard SYNTHETIC sheets: false passes, misreads, learning curve
+.venv/Scripts/python tools/corridor_ramp_eval.py data/synthetic/SYNTHETIC_corridor_ramp_seed202   # corridors, ramps
 ```
+
+Offline demo: `data/demo_offline_SYNTHETIC/` has one drawing per result type (pass, fail, can't tell,
+conflict). Upload with the passenger-test profile; no API key or network needed.
+
+Uploads: 50 MB and 200 PDF pages at most (choose pages for larger sets). Broken, empty, renamed, or
+password-protected files get a 400 with the reason. Without an API key, scanned drawings, images, and
+chat answer 503 and say a key is needed; everything else keeps working. API timeouts and rate limits are
+retried once after 2 s. A value with no or an unknown unit, or a zero or negative length, is never used:
+it shows as can't tell.
 
 ## Spending cap
 
