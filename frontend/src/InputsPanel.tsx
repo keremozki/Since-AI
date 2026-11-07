@@ -32,8 +32,9 @@ export default function InputsPanel({ profileId, inputs, note, onDone, onError, 
   const addFile = (file: File | undefined) => {
     if (!file || busy) return;
     if (file.name.toLowerCase().endsWith(".nwd")) {
-      act("Reading the 3D model. A large file can take a minute.", () => api.importModel(profileId, file),
-        (u) => `${file.name} imported: ${u.inputs.model.parts} parts.`);
+      act("Uploading the 3D model.", () => api.importModel(profileId, file, (fraction) => {
+        setBusy(fraction < 1 ? `Uploading the 3D model: ${Math.round(fraction * 100)}%` : "Reading the 3D model.");
+      }), (u) => `${file.name} imported: ${u.inputs.model.parts} parts.`);
     } else {
       act("Reading the file.", () => api.upload(profileId, file, pages),
         (u) => `${file.name} read${u.cached ? " from saved results, at no cost" : ""}: ${u.recorded.length} new fact(s).`);

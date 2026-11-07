@@ -214,8 +214,8 @@ def test_measurements_and_chat_can_be_removed_as_groups(tmp_path):
 
 
 def import_model(api, monkeypatch, parts, name="other.nwd"):
-    monkeypatch.setattr("app.nwd.decode", lambda path: parts)
-    return api.post("/api/inputs/model", data={"profile": "rcrv"}, files={"file": (name, b"data")})
+    monkeypatch.setattr("app.nwd.decode_bytes", lambda data: parts)
+    return api.post("/api/inputs/model", params={"profile": "rcrv", "name": name}, content=b"data")
 
 
 def test_importing_a_different_model_replaces_it_and_drops_measurements(tmp_path, monkeypatch):
@@ -225,7 +225,6 @@ def test_importing_a_different_model_replaces_it_and_drops_measurements(tmp_path
     body = import_model(api, monkeypatch, parts).json()
     assert body["inputs"]["model"]["name"] == "other.nwd" and body["inputs"]["model"]["parts"] == 1
     assert state.added == []
-    assert not list(state.data_dir.glob("*.nwd"))
 
 
 def test_only_the_model_the_geometry_belongs_to_has_a_3d_view(tmp_path, monkeypatch):
@@ -251,12 +250,11 @@ def test_a_file_with_no_readable_parts_keeps_the_current_model(tmp_path, monkeyp
     response = import_model(api, monkeypatch, [])
     assert response.status_code == 400
     assert state.inputs()["model"]["parts"] == 2
-    assert not list(state.data_dir.glob("*.nwd"))
 
 
 def test_only_nwd_files_import_as_3d_models(tmp_path):
     api, _ = client(tmp_path, FakeClaude())
-    response = api.post("/api/inputs/model", data={"profile": "rcrv"}, files={"file": ("model.step", b"x")})
+    response = api.post("/api/inputs/model", params={"profile": "rcrv", "name": "model.step"}, content=b"x")
     assert response.status_code == 400 and "nwd" in response.json()["detail"]
 
 

@@ -18,6 +18,10 @@ const SHIP_CENTRE = new THREE.Vector3(-1000, 0, 400);
 const FULL_CUT = 1300;
 const CUT_ABOVE_FINDING_IN = 95;
 const SNAP_IN = 4;
+const MAX_PIXEL_RATIO = 1.5;
+const MAX_DECODE_WORKERS = 4;
+const CAMERA_NEAR_IN = 10;
+const CAMERA_FAR_IN = 20000;
 const MARKER_SIZE = 0.016;
 const MARKER_SIZE_SELECTED = 0.04;
 const MODEL_MUTE = 0.75;
@@ -170,6 +174,7 @@ class ViewerCore {
   private points: THREE.Vector3[] = [];
   private flight: { from: THREE.Vector3; to: THREE.Vector3; fromT: THREE.Vector3; toT: THREE.Vector3; start: number } | null = null;
   private frame = 0;
+  private needsRender = true;
   private disposed = false;
   private pointerDown = { x: 0, y: 0 };
   private observer: ResizeObserver;
@@ -179,16 +184,20 @@ class ViewerCore {
     measured: (measurement: Measurement | null) => void;
     status: (text: string) => void;
   }) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // A logarithmic depth buffer would make the GPU shade hidden surfaces too, so it isn't used here.
+    this.renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 1.5 });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this.renderer.localClippingEnabled = true;
     host.appendChild(this.renderer.domElement);
     this.scene.background = new THREE.Color(0xe9eef2);
-    this.camera = new THREE.PerspectiveCamera(40, 1, 5, 50000);
+    this.camera = new THREE.PerspectiveCamera(40, 1, CAMERA_NEAR_IN, CAMERA_FAR_IN);
     this.camera.up.set(0, 0, 1);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
+    this.controls.minDistance = 30;
+    this.controls.maxDistance = CAMERA_FAR_IN / 2;
+    this.controls.addEventListener("change", () => this.invalidate());
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a97a3, 2.2));
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(1500, -2500, 4000);
@@ -206,10 +215,18 @@ class ViewerCore {
       this.frame = requestAnimationFrame(loop);
       this.updateFlight();
       this.controls.update();
-      this.renderer.render(this.scene, this.camera);
+      // Drawing millions of triangles is the costly part, so only draw when something changed.
+      if (this.needsRender) {
+        this.needsRender = false;
+        this.renderer.render(this.scene, this.camera);
+      }
     };
     loop();
     (window as unknown as { __viewer: ViewerCore }).__viewer = this;
+  }
+
+  private invalidate() {
+    this.needsRender = true;
   }
 
   /** The decoded model stays in memory while hidden, so that restoring it is instant. */
@@ -221,6 +238,7 @@ class ViewerCore {
       this.load();
     }
     for (const mesh of this.meshes) mesh.visible = visible && mesh.userData.category !== "Insulation";
+    this.invalidate();
   }
 
   private async load() {
@@ -230,22 +248,32 @@ class ViewerCore {
         fetch("/model/bin").then((r) => { if (!r.ok) throw new Error("no model"); return r.arrayBuffer(); }),
       ]);
       await MeshoptDecoder.ready;
+      // Worker threads decode the model, so that the page stays responsive meanwhile.
+      MeshoptDecoder.useWorkers(Math.max(1, Math.min(navigator.hardwareConcurrency - 1, MAX_DECODE_WORKERS)));
       this.meta = meta;
       const data = new Uint8Array(bytes);
+      this.events.status("Decoding the 3D model");
       let offset = 0;
+      const decoded = meta.cats.map((category) => {
+        const take = (size: number) => {
+          const part = data.subarray(offset, offset + size);
+          offset += size;
+          return part;
+        };
+        const [vertexBytes, colourBytes, indexBytes] = category.sizes;
+        return Promise.all([
+          MeshoptDecoder.decodeGltfBufferAsync(category.verts, 8, take(vertexBytes), "ATTRIBUTES"),
+          MeshoptDecoder.decodeGltfBufferAsync(category.verts, 4, take(colourBytes), "ATTRIBUTES"),
+          MeshoptDecoder.decodeGltfBufferAsync(category.tris * 3, 4, take(indexBytes), "TRIANGLES"),
+        ]);
+      });
+      const buffers = await Promise.all(decoded);
+      MeshoptDecoder.useWorkers(0);
       for (const [index, category] of meta.cats.entries()) {
         if (this.disposed) return;
-        this.events.status(`Decoding ${category.name.toLowerCase()} (${index + 1} of ${meta.cats.length})`);
-        await new Promise((resolve) => setTimeout(resolve));
-        const positions = new Uint16Array(category.verts * 4);
-        const colours = new Uint8Array(category.verts * 4);
-        const indices = new Uint32Array(category.tris * 3);
-        MeshoptDecoder.decodeVertexBuffer(new Uint8Array(positions.buffer), category.verts, 8, data.subarray(offset, offset + category.sizes[0]));
-        offset += category.sizes[0];
-        MeshoptDecoder.decodeVertexBuffer(colours, category.verts, 4, data.subarray(offset, offset + category.sizes[1]));
-        offset += category.sizes[1];
-        MeshoptDecoder.decodeIndexBuffer(new Uint8Array(indices.buffer), indices.length, 4, data.subarray(offset, offset + category.sizes[2]));
-        offset += category.sizes[2];
+        const [positionBytes, colours, indexData] = buffers[index];
+        const positions = new Uint16Array(positionBytes.buffer, positionBytes.byteOffset, category.verts * 4);
+        const indices = new Uint32Array(indexData.buffer, indexData.byteOffset, category.tris * 3);
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(positions, 4), 3, 0, false));
         geometry.setAttribute("color", new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(colours, 4), 3, 0, true));
@@ -267,6 +295,7 @@ class ViewerCore {
         mesh.visible = this.modelVisible && category.name !== "Insulation";
         this.meshes.push(mesh);
         this.scene.add(mesh);
+        this.invalidate();
         this.geometries.push({ name: category.name, geometry });
       }
       this.events.status("");
@@ -291,6 +320,7 @@ class ViewerCore {
       sprite.userData.finding = finding;
       this.markers.add(sprite);
     }
+    this.invalidate();
   }
 
   highlight(finding: Finding | null) {
@@ -300,16 +330,19 @@ class ViewerCore {
       child.material.opacity = finding && !on ? 0.45 : 1;
       child.renderOrder = on ? 12 : 10;
     }
+    this.invalidate();
   }
 
   setCut(height: number) {
     this.clip.constant = height;
+    this.invalidate();
   }
 
   home() {
     this.flight = null;
     this.camera.position.set(-1000, -3600, 1500);
     this.controls.target.copy(SHIP_CENTRE);
+    this.invalidate();
   }
 
   /** Look down into the ship from above, for a deck slice. */
@@ -341,6 +374,7 @@ class ViewerCore {
     const eased = t * t * (3 - 2 * t);
     this.camera.position.lerpVectors(this.flight.from, this.flight.to, eased);
     this.controls.target.lerpVectors(this.flight.fromT, this.flight.toT, eased);
+    this.invalidate();
     if (t === 1) this.flight = null;
   }
 
@@ -349,6 +383,7 @@ class ViewerCore {
     this.points = [];
     this.measureGroup.clear();
     this.events.measured(null);
+    this.invalidate();
     if (on && !this.pickBuilt) {
       this.events.status("Preparing the model for measuring");
       setTimeout(() => this.buildPicking());
@@ -421,6 +456,7 @@ class ViewerCore {
       this.measureGroup.add(line);
       this.events.measured({ a: { x: a.x, y: a.y, z: a.z }, b: { x: b.x, y: b.y, z: b.z } });
     }
+    this.invalidate();
   }
 
   /** Move a clicked point to the corner of the face it hit, if one is close. */
@@ -443,6 +479,7 @@ class ViewerCore {
     this.renderer.setSize(clientWidth, clientHeight);
     this.camera.aspect = clientWidth / clientHeight;
     this.camera.updateProjectionMatrix();
+    this.invalidate();
   }
 
   dispose() {

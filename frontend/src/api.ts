@@ -141,12 +141,21 @@ export const api = {
     fetch(`/api/inputs/model?profile=${encodeURIComponent(profile)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
   restoreModel: (profile: string) =>
     fetch(`/api/inputs/model/restore?profile=${encodeURIComponent(profile)}`, { method: "POST" }).then((r) => parse<UpdateResponse>(r)),
-  importModel: (profile: string, file: File) => {
-    const form = new FormData();
-    form.append("profile", profile);
-    form.append("file", file);
-    return fetch("/api/inputs/model", { method: "POST", body: form }).then((r) => parse<UpdateResponse>(r));
-  },
+  /** Uses XMLHttpRequest because fetch can't report upload progress. */
+  importModel: (profile: string, file: File, onUploaded: (fraction: number) => void) =>
+    new Promise<UpdateResponse>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", `/api/inputs/model?profile=${encodeURIComponent(profile)}&name=${encodeURIComponent(file.name)}`);
+      request.upload.onprogress = (event) => { if (event.lengthComputable) onUploaded(event.loaded / event.total); };
+      request.onerror = () => reject(new Error("The upload failed. Is the backend running?"));
+      request.onload = () => {
+        let body: { detail?: string } | null = null;
+        try { body = JSON.parse(request.responseText); } catch { /* Handled below. */ }
+        if (request.status >= 200 && request.status < 300 && body) resolve(body as UpdateResponse);
+        else reject(new Error(body?.detail ?? `Request failed (${request.status})`));
+      };
+      request.send(file);
+    }),
   removeFile: (profile: string, name: string) =>
     fetch(`/api/inputs/files?profile=${encodeURIComponent(profile)}&name=${encodeURIComponent(name)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
   removeGroup: (profile: string, group: "measurements" | "chat") =>

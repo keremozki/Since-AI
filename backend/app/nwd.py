@@ -16,6 +16,10 @@ INT = struct.Struct("<i")
 DOUBLE = struct.Struct("<d")
 HEADER_BYTES = 96
 STEP = 1 << 18
+GEOMETRY_CHUNK = 65536
+MAX_PROPERTY_CHUNK = 3_000_000
+# Four zero bytes, then a zlib header, separate the geometry from the part properties.
+PROPERTY_MARKER = b"\x00\x00\x00\x00\x78\x9c"
 PRINTABLE = re.compile(rb"[\x20-\x7e]+")
 KEEP_FIELDS = {
     "Part Name": "name",
@@ -34,17 +38,17 @@ KEEP_FIELDS = {
 CG = re.compile(r"x=(-?[\d.]+),\s*y=(-?[\d.]+),\s*z=(-?[\d.]+)")
 
 
-def inflate_chunks(data: bytes):
+def inflate_chunks(data: bytes, start: int = HEADER_BYTES):
     """Yield each zlib chunk in the file, skipping any non-zlib gap between them."""
     view = memoryview(data)
-    pos = HEADER_BYTES
+    pos = start
     while pos < len(data):
         decoder = zlib.decompressobj()
         parts, cursor = [], pos
         try:
             while not decoder.eof and cursor < len(data):
                 parts.append(decoder.decompress(view[cursor : cursor + STEP]))
-                cursor += STEP
+                cursor = min(cursor + STEP, len(data))
         except zlib.error:
             next_pos = _next_chunk(data, view, pos)
             if next_pos is None:
@@ -135,10 +139,32 @@ def to_part(record: dict) -> dict | None:
     return part
 
 
-def decode(path: Path) -> list[dict]:
+def _parts_from(data: bytes, start: int) -> list[dict]:
     parts: list[dict] = []
-    for chunk in inflate_chunks(path.read_bytes()):
-        if len(chunk) == 65536 or len(chunk) > 3_000_000 or b"Part Name" not in chunk:
+    for chunk in inflate_chunks(data, start):
+        if len(chunk) > MAX_PROPERTY_CHUNK:
+            if parts:
+                # The chunks after the part properties are large and hold nothing we read.
+                break
             continue
-        parts.extend(p for p in map(to_part, parse_records(chunk)) if p)
+        if len(chunk) != GEOMETRY_CHUNK and b"Part Name" in chunk:
+            parts.extend(p for p in map(to_part, parse_records(chunk)) if p)
     return parts
+
+
+def decode(path: Path) -> list[dict]:
+    return decode_bytes(path.read_bytes())
+
+
+def decode_bytes(data: bytes | bytearray) -> list[dict]:
+    """Read the named parts, skipping the geometry that makes up most of the file.
+
+    A zlib chunk doesn't state its length, so skipping ahead needs a known marker. If the marker
+    is missing or leads to nothing, read the whole file instead.
+    """
+    marker = data.find(PROPERTY_MARKER, HEADER_BYTES)
+    if marker >= 0:
+        parts = _parts_from(data, marker + len(PROPERTY_MARKER) - 2)
+        if parts:
+            return parts
+    return _parts_from(data, HEADER_BYTES)

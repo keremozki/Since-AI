@@ -4,11 +4,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
-import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -124,9 +123,9 @@ class AppState:
             self._save_inputs()
             self._load_active_model()
 
-    def import_model(self, path: Path, name: str) -> None:
+    def import_model(self, data: bytes | bytearray, name: str) -> None:
         """Replace the active model. Measurements belong to a model, so a different ship drops them."""
-        parts = nwd.decode(path)
+        parts = nwd.decode_bytes(data)
         if not parts:
             raise ValueError(f"No named parts could be read from {name}. The file may be a format we don't support.")
         digest = _digest(parts)
@@ -258,20 +257,19 @@ def create_app(state: AppState | None = None) -> FastAPI:
         return rerun(before, profile)
 
     @app.post("/api/inputs/model")
-    def import_model(profile: str = Form(...), file: UploadFile = File(...)):
-        name = file.filename or "model"
+    async def import_model(profile: str, name: str, request: Request):
+        """The request body is the file itself. Sending it unwrapped makes a large upload much faster."""
         if Path(name).suffix.lower() != ".nwd":
             raise HTTPException(400, f"Can't import {name}. The app reads Navisworks .nwd files only.")
         before = state.result(profile)
-        state.data_dir.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=state.data_dir, suffix=".nwd", delete=False) as temporary:
-            shutil.copyfileobj(file.file, temporary)
+        # Kept in memory: writing a large file to disk first would only add time.
+        data = bytearray()
+        async for chunk in request.stream():
+            data += chunk
         try:
-            state.import_model(Path(temporary.name), name)
+            await run_in_threadpool(state.import_model, data, name)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
-        finally:
-            Path(temporary.name).unlink(missing_ok=True)
         return rerun(before, profile)
 
     @app.delete("/api/inputs/files")
