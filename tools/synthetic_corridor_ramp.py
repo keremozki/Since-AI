@@ -131,6 +131,8 @@ def ramp_label(style: str, value: tuple[Fraction, ...]) -> tuple[str, list[dict]
 def plan_cases(rng: random.Random, sheets: int) -> list[dict]:
     """Every case at least once per set, spread over the sheets. Odd-numbered sheets carry
     'ALL DIMENSIONS IN MM': bare numbers go only there, ambiguous-unit cases only on the others."""
+    if sheets < 2:
+        raise ValueError("A set needs at least 2 sheets: one with a sheet unit note and one without.")
     per_sheet = [{"note": i % 2 == 0, "corridors": [], "ramps": []} for i in range(sheets)]
     for kind, base, per in (("corridors", CORRIDOR_CASES, 6), ("ramps", RAMP_CASES, 4)):
         cases = base * max(1, -(-sheets * per // len(base)))
