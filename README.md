@@ -57,7 +57,7 @@ cd backend
 ../.venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
 
-Open http://127.0.0.1:8000. The checks work with no API key, but chat and drawing reading need one.
+Open http://127.0.0.1:8000. The checks, vector PDF drawings, and the offline demo work with no API key. Chat, images, and scanned drawings need one.
 
 ## Managing inputs
 
