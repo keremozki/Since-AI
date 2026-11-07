@@ -5,10 +5,12 @@ Every plan gets a truth file in data/synthetic/: the facts a perfect reader woul
 
 Limits come only from verified rule texts in docs/rules (PVAG, proposed, not in force):
   door clear width   >= 32 in (815 mm)   PVAG V404.2.3  (checked by the app: door_clear_width)
-  walking surface    >= 36 in (915 mm)   PVAG V403.5.1  (no check in the app yet)
-  ramp running slope <= 1:12             PVAG V405.2    (no check in the app yet)
+  walking surface    >= 36 in (915 mm)   PVAG V403.5.1  (corridor_width; the three plans below predate it)
+  ramp running slope <= 1:12             PVAG V405.2    (ramp_slope; the three plans below predate it)
 
 Usage: python tools/make_synthetic_ga.py   (writes data/synthetic/*.pdf and *.truth.json)
+       python tools/make_synthetic_ga.py --corridor-ramp-seed 101
+           (seeded SYNTHETIC corridor and ramp set, see tools/synthetic_corridor_ramp.py)
 """
 from __future__ import annotations
 
@@ -206,6 +208,16 @@ def expected_results(plan: dict) -> list[dict]:
 
 
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--corridor-ramp-seed", type=int, help="write a seeded SYNTHETIC corridor and ramp set instead")
+    parser.add_argument("--sheets", type=int, default=6)
+    args = parser.parse_args()
+    if args.corridor_ramp_seed is not None:
+        from synthetic_corridor_ramp import make_corridor_ramp_set
+        folder = make_corridor_ramp_set(args.corridor_ramp_seed, OUT, args.sheets)
+        print("wrote", folder.relative_to(ROOT))
+        return
     OUT.mkdir(parents=True, exist_ok=True)
     for plan in PLANS:
         pdf = OUT / f"{plan['name']}.pdf"
