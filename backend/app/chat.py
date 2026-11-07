@@ -1,7 +1,7 @@
 """Chat with the engineer. The AI explains results and records stated facts, but never decides one."""
 from __future__ import annotations
 
-from .llm import Claude
+from .llm import Claude, ModelRefused
 from .models import Fact, RunResult, Source, SourceKind, Status
 from .vocabulary import FACT_SCHEMA, to_fact, vocabulary_text
 
@@ -62,6 +62,10 @@ def respond(claude: Claude, result: RunResult, history: list[dict], message: str
     content = (f"Current results:\n{results_context(result)}\n\n"
                f"Conversation so far:\n{transcript or '(none)'}\n\nEngineer: {message}")
     output = claude.structured(SYSTEM, content, RESPONSE_SCHEMA, effort="low", max_tokens=2000)
+    reply, raw_facts = output.get("reply"), output.get("facts") or []
+    if not isinstance(reply, str) or not reply.strip() or not isinstance(raw_facts, list):
+        # Recording facts without the reply that states them would change results silently.
+        raise ModelRefused("The AI answer was incomplete, so nothing was recorded. Ask again.")
     template = Source(kind=SourceKind.CHAT, locator="chat")
-    facts = [fact for fact in (to_fact(raw, template) for raw in output["facts"]) if fact]
-    return output["reply"], facts, len(output["facts"]) - len(facts)
+    facts = [fact for fact in (to_fact(raw, template) for raw in raw_facts if isinstance(raw, dict)) if fact]
+    return reply, facts, len(raw_facts) - len(facts)

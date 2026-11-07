@@ -1,0 +1,1258 @@
+{
+  "SYNTHETIC": true,
+  "set": "SYNTHETIC_corridor_ramp_seed101",
+  "summary": {
+    "corridor": {
+      "evaluated": 0,
+      "found": 0,
+      "got_no result": 39,
+      "match": 0,
+      "missed": 39,
+      "objects": 39,
+      "unreadable": 9,
+      "unreadable_cant_tell": 0,
+      "violations": 19,
+      "violations_missed": 19,
+      "wrong_reading": 0,
+      "coverage": 0.0,
+      "status_accuracy": 0.0
+    },
+    "ramp": {
+      "evaluated": 0,
+      "found": 0,
+      "got_no result": 30,
+      "match": 0,
+      "missed": 30,
+      "objects": 30,
+      "unreadable": 9,
+      "unreadable_cant_tell": 0,
+      "violations": 9,
+      "violations_missed": 9,
+      "wrong_reading": 0,
+      "coverage": 0.0,
+      "status_accuracy": 0.0
+    }
+  },
+  "rows": [
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-1",
+      "case": "compliant",
+      "style": "in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-1",
+          "clear_width",
+          1203.3
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-2",
+      "case": "compliant",
+      "style": "in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-2",
+          "clear_width",
+          1390.6
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-3",
+      "case": "just_above_32",
+      "style": "mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-3",
+          "clear_width",
+          813.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-4",
+      "case": "exactly_36",
+      "style": "ftin",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-4",
+          "clear_width",
+          914.4
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-5",
+      "case": "just_above_36",
+      "style": "m",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-5",
+          "clear_width",
+          920.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-6",
+      "case": "just_above_36",
+      "style": "mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-6",
+          "clear_width",
+          915.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "corridor:C1-7",
+      "case": "just_above_32",
+      "style": "bare",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C1-7",
+          "clear_width",
+          815.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "ramp:R1-1",
+      "case": "just_steeper",
+      "style": "ratio",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R1-1",
+          "slope_run_per_rise",
+          11.5
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "ramp:R1-2",
+      "case": "exactly_1_12",
+      "style": "riserun_m",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R1-2",
+          "rise",
+          120.0
+        ],
+        [
+          "ramp:R1-2",
+          "run",
+          1440.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "ramp:R1-3",
+      "case": "violating",
+      "style": "riserun_m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R1-3",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R1-3",
+          "run",
+          1800.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "ramp:R1-4",
+      "case": "violating",
+      "style": "riserun_mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R1-4",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R1-4",
+          "run",
+          1620.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_01.pdf",
+      "subject": "ramp:R1-5",
+      "case": "unreadable_rotated",
+      "style": "riserun_mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "corridor:C2-1",
+      "case": "exactly_36",
+      "style": "ftin",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C2-1",
+          "clear_width",
+          914.4
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "corridor:C2-2",
+      "case": "exactly_36",
+      "style": "in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C2-2",
+          "clear_width",
+          914.4
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "corridor:C2-3",
+      "case": "unreadable_ambiguous_unit",
+      "style": "bare",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "corridor:C2-4",
+      "case": "unreadable_missing",
+      "style": "mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "corridor:C2-5",
+      "case": "just_below_36",
+      "style": "ftin",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C2-5",
+          "clear_width",
+          901.7
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "corridor:C2-6",
+      "case": "just_below_32",
+      "style": "mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C2-6",
+          "clear_width",
+          812.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "ramp:R2-1",
+      "case": "unreadable_rotated",
+      "style": "riserun_in",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "ramp:R2-2",
+      "case": "violating",
+      "style": "riserun_mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R2-2",
+          "rise",
+          150.0
+        ],
+        [
+          "ramp:R2-2",
+          "run",
+          1500.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "ramp:R2-3",
+      "case": "exactly_1_12",
+      "style": "riserun_in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R2-3",
+          "rise",
+          101.6
+        ],
+        [
+          "ramp:R2-3",
+          "run",
+          1219.2
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "ramp:R2-4",
+      "case": "unreadable_rotated",
+      "style": "riserun_mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_02.pdf",
+      "subject": "ramp:R2-5",
+      "case": "compliant",
+      "style": "riserun_m",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R2-5",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R2-5",
+          "run",
+          2520.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "corridor:C3-1",
+      "case": "compliant",
+      "style": "mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C3-1",
+          "clear_width",
+          1098.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "corridor:C3-2",
+      "case": "violating",
+      "style": "m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C3-2",
+          "clear_width",
+          720.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "corridor:C3-3",
+      "case": "compliant",
+      "style": "bare",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C3-3",
+          "clear_width",
+          1260.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "corridor:C3-4",
+      "case": "compliant",
+      "style": "in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C3-4",
+          "clear_width",
+          1485.9
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "corridor:C3-5",
+      "case": "just_below_32",
+      "style": "mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C3-5",
+          "clear_width",
+          812.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "corridor:C3-6",
+      "case": "violating",
+      "style": "mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C3-6",
+          "clear_width",
+          768.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "ramp:R3-1",
+      "case": "compliant",
+      "style": "ratio",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R3-1",
+          "slope_run_per_rise",
+          20.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "ramp:R3-2",
+      "case": "compliant",
+      "style": "riserun_mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R3-2",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R3-2",
+          "run",
+          2340.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "ramp:R3-3",
+      "case": "unreadable_missing",
+      "style": "riserun_in",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "ramp:R3-4",
+      "case": "violating",
+      "style": "riserun_mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R3-4",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R3-4",
+          "run",
+          1800.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_03.pdf",
+      "subject": "ramp:R3-5",
+      "case": "just_shallower",
+      "style": "riserun_mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R3-5",
+          "rise",
+          120.0
+        ],
+        [
+          "ramp:R3-5",
+          "run",
+          1450.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "corridor:C4-1",
+      "case": "exception_band",
+      "style": "mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C4-1",
+          "clear_width",
+          877.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "corridor:C4-2",
+      "case": "exception_band",
+      "style": "mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C4-2",
+          "clear_width",
+          843.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "corridor:C4-3",
+      "case": "unreadable_rotated",
+      "style": "ftin",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "corridor:C4-4",
+      "case": "violating",
+      "style": "mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C4-4",
+          "clear_width",
+          743.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "corridor:C4-5",
+      "case": "violating",
+      "style": "in",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C4-5",
+          "clear_width",
+          711.2
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "corridor:C4-6",
+      "case": "violating",
+      "style": "m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C4-6",
+          "clear_width",
+          680.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "ramp:R4-1",
+      "case": "just_shallower",
+      "style": "riserun_in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R4-1",
+          "rise",
+          152.4
+        ],
+        [
+          "ramp:R4-1",
+          "run",
+          1854.2
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "ramp:R4-2",
+      "case": "just_steeper",
+      "style": "riserun_m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R4-2",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R4-2",
+          "run",
+          2150.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "ramp:R4-3",
+      "case": "compliant",
+      "style": "riserun_m",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R4-3",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R4-3",
+          "run",
+          2520.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "ramp:R4-4",
+      "case": "violating",
+      "style": "riserun_m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R4-4",
+          "rise",
+          180.0
+        ],
+        [
+          "ramp:R4-4",
+          "run",
+          1440.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_04.pdf",
+      "subject": "ramp:R4-5",
+      "case": "unreadable_ambiguous_unit",
+      "style": "riserun_in",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-1",
+      "case": "just_below_36",
+      "style": "in",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C5-1",
+          "clear_width",
+          911.2
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-2",
+      "case": "violating",
+      "style": "m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C5-2",
+          "clear_width",
+          660.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-3",
+      "case": "just_below_36",
+      "style": "in",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C5-3",
+          "clear_width",
+          911.2
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-4",
+      "case": "just_above_32",
+      "style": "m",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C5-4",
+          "clear_width",
+          820.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-5",
+      "case": "just_below_32",
+      "style": "m",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C5-5",
+          "clear_width",
+          810.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-6",
+      "case": "just_above_36",
+      "style": "mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C5-6",
+          "clear_width",
+          915.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "corridor:C5-7",
+      "case": "unreadable_rotated",
+      "style": "ftin",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "ramp:R5-1",
+      "case": "unreadable_missing",
+      "style": "ratio",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "ramp:R5-2",
+      "case": "just_steeper",
+      "style": "riserun_mm",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R5-2",
+          "rise",
+          120.0
+        ],
+        [
+          "ramp:R5-2",
+          "run",
+          1430.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "ramp:R5-3",
+      "case": "just_shallower",
+      "style": "riserun_mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R5-3",
+          "rise",
+          150.0
+        ],
+        [
+          "ramp:R5-3",
+          "run",
+          1810.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "ramp:R5-4",
+      "case": "unreadable_missing",
+      "style": "riserun_mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_05.pdf",
+      "subject": "ramp:R5-5",
+      "case": "compliant",
+      "style": "ratio",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R5-5",
+          "slope_run_per_rise",
+          15.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-1",
+      "case": "exception_band",
+      "style": "ftin",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C6-1",
+          "clear_width",
+          825.5
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-2",
+      "case": "unreadable_missing",
+      "style": "m",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-3",
+      "case": "unreadable_missing",
+      "style": "in",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-4",
+      "case": "unreadable_rotated",
+      "style": "m",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-5",
+      "case": "unreadable_ambiguous_unit",
+      "style": "bare",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-6",
+      "case": "compliant",
+      "style": "in",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "corridor:C6-6",
+          "clear_width",
+          1124.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "corridor:C6-7",
+      "case": "unreadable_ambiguous_unit",
+      "style": "bare",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "ramp:R6-1",
+      "case": "exactly_1_12",
+      "style": "ratio",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R6-1",
+          "slope_run_per_rise",
+          12.0
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "ramp:R6-2",
+      "case": "unreadable_ambiguous_unit",
+      "style": "riserun_m",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "ramp:R6-3",
+      "case": "unreadable_ambiguous_unit",
+      "style": "riserun_mm",
+      "expected": "cant_tell",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": []
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "ramp:R6-4",
+      "case": "violating",
+      "style": "riserun_in",
+      "expected": "fail",
+      "got": "no result",
+      "violation": true,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R6-4",
+          "rise",
+          152.4
+        ],
+        [
+          "ramp:R6-4",
+          "run",
+          1219.2
+        ]
+      ]
+    },
+    {
+      "file": "SYNTHETIC_cr_s101_06.pdf",
+      "subject": "ramp:R6-5",
+      "case": "compliant",
+      "style": "riserun_mm",
+      "expected": "pass",
+      "got": "no result",
+      "violation": false,
+      "found": false,
+      "wrong_readings": [],
+      "missing_readings": [
+        [
+          "ramp:R6-5",
+          "rise",
+          150.0
+        ],
+        [
+          "ramp:R6-5",
+          "run",
+          1950.0
+        ]
+      ]
+    }
+  ],
+  "tag": "first_run_fresh"
+}

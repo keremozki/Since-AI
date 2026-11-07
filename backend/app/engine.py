@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from .checks import CHECKS, check_consistency
+from .checks import CHECKS, check_consistency, input_findings, unusable_facts
 from .models import Finding, Rule, RunResult, ShipProfile, Status
 from .rules import decide_scope
 from .store import FactStore
@@ -14,10 +14,17 @@ STATUS_ORDER = {Status.FAIL: 0, Status.CONFLICT: 1, Status.CANT_TELL: 2, Status.
 def run(store: FactStore, rules: list[Rule], profile: ShipProfile, gate=None) -> RunResult:
     """`gate` is an optional ConfidenceGate. It can only turn a fail into can't tell."""
     scope = [decide_scope(rule, profile) for rule in rules]
-    findings: list[Finding] = []
+    bad = unusable_facts(store)
+    findings: list[Finding] = input_findings(bad)
+    if bad:
+        dropped = {id(fact) for fact, _ in bad}
+        store = FactStore([f for f in store.facts if id(f) not in dropped])
     for rule, decision in zip(rules, scope):
         if decision.applies:
-            findings.extend(CHECKS[rule.check](rule, store, profile))
+            try:
+                findings.extend(CHECKS[rule.check](rule, store, profile))
+            except Exception as error:  # a crash must never look like a pass, or hide the other checks
+                findings.append(_crashed(rule, error))
     findings.extend(check_consistency(store))
     if gate is not None:
         findings = gate.apply(findings, store)
@@ -26,6 +33,14 @@ def run(store: FactStore, rules: list[Rule], profile: ShipProfile, gate=None) ->
     all_counts = {status.value: counts.get(status.value, 0) for status in Status}
     return RunResult(profile=profile, findings=findings, scope=scope, counts=all_counts,
                      summary=_summary(all_counts, scope), fact_count=len(store.facts))
+
+
+def _crashed(rule: Rule, error: Exception) -> Finding:
+    return Finding(rule_id=rule.id, rule_title=rule.title, area=rule.area, rule_source=rule.source,
+                   status=Status.CANT_TELL, subject=rule.id, label=rule.title, provisional=not rule.verified,
+                   measured=f"This check stopped on an input it couldn't use ({type(error).__name__}: {error}).",
+                   why="A check that can't run gives no pass and no fail.",
+                   question="Check the values this rule uses (units, numbers), then run the checks again.")
 
 
 def _summary(counts: dict[str, int], scope) -> str:

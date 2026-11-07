@@ -10,7 +10,8 @@ from typing import Callable
 
 from .models import Evidence, Fact, Finding, Rule, ShipProfile, Status
 from .store import FactStore
-from .units import fmt_length, is_length_unit, to_mm
+from .units import fmt_length, is_length_unit, length_problem, to_mm
+from .vocabulary import VOCABULARY
 
 CONSISTENCY_RULE = Rule(
     id="CROSS-CHECK",
@@ -38,7 +39,11 @@ PLAIN_NAMES = {
     "eye_to_obstruction": "Distance to forward obstruction",
     "eye_to_bow": "Distance to bow",
     "clear_width": "Clear width",
+    "rise": "Rise",
+    "run": "Run",
+    "slope_run_per_rise": "Run per unit of rise",
 }
+NAMED_SUBJECTS = {"door-number": "Door", "corridor": "Corridor", "ramp": "Ramp"}
 
 
 def _plain(prop: str) -> str:
@@ -46,10 +51,64 @@ def _plain(prop: str) -> str:
 
 
 def describe_fact(fact: Fact) -> str:
-    """A recorded fact in plain words, like "Crew count: 12 persons"."""
-    door = f"Door {fact.subject.split(':', 1)[1]} " if fact.subject.startswith("door-number:") else ""
+    """A recorded fact in plain words, like "Crew count: 12 persons" or "Corridor C2 clear width: 30 in"."""
+    kind, _, label = fact.subject.partition(":")
+    owner = f"{NAMED_SUBJECTS[kind]} {label} " if label and kind in NAMED_SUBJECTS else ""
     name = _plain(fact.property)
-    return f"{door}{name.lower() if door else name}: {_show(fact)}"
+    return f"{owner}{name.lower() if owner else name}: {_show(fact)}"
+
+
+# Unit conversion in floating point: 4 in / 48 in becomes 101.6 mm / 1219.2 mm and can land a hair
+# above 1/12. This only absorbs rounding error; it is far below any value a drawing can state.
+FLOAT_SLACK = 1e-9
+
+
+INPUT_RULE = Rule(
+    id="INPUT-CHECK",
+    title="Input value can be used",
+    area="Consistency",
+    source="Input validation before the checks",
+    check="input_values",
+    verified=True,
+)
+# Properties that must be a positive length, and numbers that can't be negative (a count can be 0).
+LENGTH_PROPERTIES = {p for _s, p, kind, _m in VOCABULARY if kind == "length"} | {"tread_length", "height_above_baseline"}
+NUMBER_PROPERTIES = {p for _s, p, kind, _m in VOCABULARY if kind == "number"}
+POSITIVE_NUMBERS = {"slope_run_per_rise", "capacity_persons", "persons_on_board", "time_minutes", "lightship_weight"}
+
+
+def unusable_facts(store: FactStore) -> list[tuple[Fact, str]]:
+    """Facts no check may use: a length with no or an unknown unit, zero, negative, or not a number.
+
+    They come from chat, measurements, saved files, or a misread. Using them could make a made-up
+    fail or a false pass, so they are taken out and reported as can't tell with the reason.
+    """
+    bad = []
+    for fact in store.facts:
+        if fact.property in LENGTH_PROPERTIES:
+            problem = length_problem(fact.value, fact.unit)
+        elif fact.property in NUMBER_PROPERTIES:
+            value = fact.value
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value or value in (float("inf"), float("-inf")):
+                problem = f"the value {value!r} is not a number"
+            elif value < 0 or (value == 0 and fact.property in POSITIVE_NUMBERS):
+                problem = f"{value:g} is not possible here"
+            else:
+                problem = ""
+        else:
+            problem = ""
+        if problem:
+            bad.append((fact, problem))
+    return bad
+
+
+def input_findings(bad: list[tuple[Fact, str]]) -> list[Finding]:
+    return [_finding(INPUT_RULE, Status.CANT_TELL, fact.subject, f"{fact.subject} {fact.property.replace('_', ' ')}",
+                     measured=f"Not used: {problem}.", required="A positive number with a unit (mm, cm, m, in, ft)",
+                     why="A value that can't be right is never used to pass or fail a check.",
+                     sources=_sources(fact), location=fact.location,
+                     question=f"What is the correct {fact.property.replace('_', ' ')} of {fact.subject}?")
+            for fact, problem in bad]
 
 
 def _finding(rule: Rule, status: Status, subject: str, label: str, **fields) -> Finding:
@@ -60,6 +119,18 @@ def _finding(rule: Rule, status: Status, subject: str, label: str, **fields) -> 
 
 def _sources(*facts: Fact | None) -> list[str]:
     return list(dict.fromkeys(f.source.describe() for f in facts if f))
+
+
+def _not_written(rule: Rule, subject: str, label: str, shown: Fact | None, what: str, **fields) -> Finding:
+    """Can't tell for a labelled object with no usable value. It names the text found, where, and why
+    the value next to it wasn't used, so the engineer knows exactly what to look at."""
+    measured = f"{what} not written on the drawing"
+    extra = {}
+    if shown is not None:
+        reason = shown.meta.get("missing") or f"no {what.lower()} is written next to it"
+        measured = f"{what} not readable: label '{shown.source.quote}' is on {shown.value}, but {reason}."
+        extra = dict(read_quote=shown.source.quote, read_file=shown.source.file, read_locator=shown.source.locator)
+    return _finding(rule, Status.CANT_TELL, subject, label, measured=measured, sources=_sources(shown), **extra, **fields)
 
 
 def _values_differ(a: Fact, b: Fact) -> bool:
@@ -156,9 +227,9 @@ def _drawing_doors(rule: Rule, store: FactStore, conflicts: dict, required: str,
         width, label = store.one(subject, "clear_width"), f"Door {number}"
         if width is None:
             shown = store.one(subject, "shown_on")
-            findings.append(_finding(rule, Status.CANT_TELL, subject, label, measured="Clear width not written on the drawing",
-                                     required=required, why=why, sources=_sources(shown), assumptions=door_assumptions,
-                                     question=f"What is the clear width of door {number}?"))
+            findings.append(_not_written(rule, subject, label, shown, "Clear width", required=required, why=why,
+                                         assumptions=door_assumptions,
+                                         question=f"What is the clear width of door {number}?"))
             continue
         passed, width_mm, limit_mm, gap, note = _width_verdict(width, min_in, min_mm)
         if passed and width.confidence == "low":
@@ -278,6 +349,101 @@ def check_stair_width(rule: Rule, store: FactStore, profile: ShipProfile) -> lis
                                      location=location,
                                      question=f"What is the clear width between handrails on stair {subject.split(':')[1]}?",
                                      **common))
+    return findings
+
+
+def check_corridor_width(rule: Rule, store: FactStore, profile: ShipProfile) -> list[Finding]:
+    min_in, reduced_in = float(rule.params["min_in"]), float(rule.params["reduced_in"])
+    required = f"At least {min_in:g} in clear width"
+    why = "Walking surfaces have a minimum clear width."
+    subjects = store.subjects("corridor:")
+    if not subjects:
+        return [_finding(rule, Status.CANT_TELL, "corridors", "Corridors", measured="No corridor widths in the design data",
+                         required=required, why=why, question="Add a drawing that gives corridor clear widths.")]
+    exceptions = ["Exceptions allow 32 in for short segments, or on a ship whose largest deck is under 3,000 sq ft. "
+                  "Segment length and deck area aren't known."]
+    findings = []
+    for subject in subjects:
+        name = subject.split(":", 1)[1]
+        label = f"Corridor {name}"
+        try:
+            width = _value(store, subject, "clear_width")
+        except _Blocked as blocked:
+            findings += _waiting(rule, blocked, label)
+            continue
+        if width is None:
+            shown = store.one(subject, "shown_on")
+            findings.append(_not_written(rule, subject, label, shown, "Clear width", required=required, why=why,
+                                         question=f"What is the clear width of corridor {name}?"))
+            continue
+        mm, limit = to_mm(float(width.value), width.unit), to_mm(min_in, "in") * (1 - FLOAT_SLACK)
+        common = dict(measured=f"{fmt_length(float(width.value), width.unit)} clear width", required=required, why=why,
+                      sources=_sources(width), location=width.location, confidence=width.confidence)
+        evidence = Evidence(measured=mm, limit=limit, limit_unit="in", facts=[width])
+        if mm >= limit and width.confidence == "low":
+            # An uncertain reading must never pass.
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common,
+                                     question=f"Confirm the clear width of corridor {name}: the reading is uncertain."))
+        elif mm >= limit:
+            findings.append(_finding(rule, Status.PASS, subject, label, **common, evidence=evidence))
+        elif mm >= to_mm(reduced_in, "in") * (1 - FLOAT_SLACK):
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common, assumptions=exceptions,
+                                     question=f"Corridor {name} is under {min_in:g} in but at least {reduced_in:g} in. "
+                                              "Is it a short segment, or is the largest deck under 3,000 sq ft?"))
+        else:
+            findings.append(_finding(rule, Status.FAIL, subject, label, **common, evidence=evidence,
+                                     gap=f"{(limit - mm) / 25.4:.1f} in ({limit - mm:.0f} mm) short"))
+    return findings
+
+
+def _ramp_slope(store: FactStore, subject: str) -> tuple[float, list[Fact]] | None:
+    """Running slope as rise over run. Code does the division, never the AI."""
+    rise, run = _value(store, subject, "rise"), _value(store, subject, "run")
+    if rise and run and to_mm(float(run.value), run.unit) > 0:
+        return to_mm(float(rise.value), rise.unit) / to_mm(float(run.value), run.unit), [rise, run]
+    ratio = _value(store, subject, "slope_run_per_rise")
+    if ratio and float(ratio.value) > 0:
+        return 1 / float(ratio.value), [ratio]
+    return None
+
+
+def check_ramp_slope(rule: Rule, store: FactStore, profile: ShipProfile) -> list[Finding]:
+    steepest = float(rule.params["max_run_per_rise"])
+    required = f"No steeper than 1:{steepest:g}"
+    why = "Ramp runs have a maximum running slope."
+    subjects = store.subjects("ramp:")
+    if not subjects:
+        return [_finding(rule, Status.CANT_TELL, "ramps", "Ramps", measured="No ramps in the design data",
+                         required=required, why=why, question="Add a drawing that gives ramp rise and run, or slope.")]
+    assumptions = ["In alterations, steeper slopes up to 1:8 are allowed for small rises (Table V405.2). New construction is assumed."]
+    findings = []
+    for subject in subjects:
+        name = subject.split(":", 1)[1]
+        label = f"Ramp {name}"
+        try:
+            found = _ramp_slope(store, subject)
+        except _Blocked as blocked:
+            findings += _waiting(rule, blocked, label)
+            continue
+        if found is None:
+            findings.append(_not_written(rule, subject, label, store.one(subject, "shown_on"), "Slope, or rise and run,",
+                                         required=required, why=why,
+                                         question=f"What is the slope of ramp {name}, or its rise and run?"))
+            continue
+        slope, facts = found
+        unsure = any(f.confidence == "low" for f in facts)
+        common = dict(measured=f"Slope 1:{1 / slope:.1f}" if slope > 0 else "Level", required=required, why=why,
+                      sources=_sources(*facts), location=facts[0].location,
+                      confidence="low" if unsure else facts[0].confidence, assumptions=assumptions)
+        within = slope <= (1 / steepest) * (1 + FLOAT_SLACK)
+        if within and unsure:
+            findings.append(_finding(rule, Status.CANT_TELL, subject, label, **common,
+                                     question=f"Confirm the slope of ramp {name}: the reading is uncertain."))
+        elif within:
+            findings.append(_finding(rule, Status.PASS, subject, label, **common))
+        else:
+            findings.append(_finding(rule, Status.FAIL, subject, label, **common,
+                                     gap=f"{slope * steepest - 1:.0%} steeper than 1:{steepest:g}"))
     return findings
 
 
@@ -461,6 +627,8 @@ def check_consistency(store: FactStore) -> list[Finding]:
 CHECKS: dict[str, Callable[[Rule, FactStore, ShipProfile], list[Finding]]] = {
     "door_clear_width": check_door_clear_width,
     "stair_width": check_stair_width,
+    "corridor_width": check_corridor_width,
+    "ramp_slope": check_ramp_slope,
     "raft_capacity": check_raft_capacity,
     "bridge_visibility": check_bridge_visibility,
     "masthead_height": check_masthead_height,

@@ -8,21 +8,22 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import chat as chat_module
 from . import confidence
-from . import ingest, nwd
+from . import ingest, lessons, nwd
 from .checks import describe_fact
 from .engine import report_text, run
-from .llm import DEFAULT_CAP_USD, BudgetExceeded, Claude, Ledger, ModelRefused, load_env
+from .llm import DEFAULT_CAP_USD, AIUnavailable, BudgetExceeded, Claude, Ledger, ModelRefused, env_float, load_env
 from .models import Fact, Point, RunResult, Source, SourceKind, Status
 from .parts import facts_from_parts, load_parts
 from .profiles import PROFILES, demo_faults
 from .rules import load_rules
 from .store import FactStore
+from .units import is_length_unit
 from .vocabulary import VOCABULARY
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,13 +54,13 @@ class AppState:
         self.added: list[Fact] = []
         if self.added_file.exists():
             self.added = [Fact(**raw) for raw in json.loads(self.added_file.read_text(encoding="utf-8"))]
-        self.ledger = Ledger(data_dir / "usage.json", float(os.environ.get("BUDGET_USD", DEFAULT_CAP_USD)))
+        self.ledger = Ledger(data_dir / "usage.json", env_float("BUDGET_USD", DEFAULT_CAP_USD))
         self.claude = claude or Claude(self.ledger)
         self.history: list[dict] = []
         # Checking quotes means reading every rule text, so do it once at startup.
         self.rules = load_rules(rules_file, rule_texts_dir)
         self.gate = confidence.ConfidenceGate(
-            data_dir / "confidence", tau=float(os.environ.get("CONFIDENCE_TAU", confidence.TAU)),
+            data_dir / "confidence", tau=env_float("CONFIDENCE_TAU", confidence.TAU),
             allow_synthetic=os.environ.get("CONFIDENCE_ALLOW_SYNTHETIC") == "1")
 
     def _load_inputs(self) -> None:
@@ -98,6 +99,16 @@ class AppState:
     def add_facts(self, facts: list[Fact]) -> None:
         self.added.extend(facts)
         self._save_added()
+
+    def drop_correction(self, label_key: str) -> None:
+        """Remove the engineer correction made with one answer (when it is answered again or undone)."""
+        kept = [f for f in self.added if not (f.source.kind == SourceKind.ENGINEER and f.meta.get("label_key") == label_key)]
+        if len(kept) != len(self.added):
+            self.added = kept
+            self._save_added()
+
+    def lessons_text(self) -> str:
+        return lessons.as_text(lessons.from_labels(self.gate.pool.rows(), allow_synthetic=self.gate.allow_synthetic))
 
     def add_file(self, name: str) -> None:
         if name not in self.files:
@@ -195,10 +206,11 @@ class FeedbackRequest(BaseModel):
     profile: str
     rule_id: str
     subject: str
-    decision: str  # accept, reject, or correct
+    decision: str  # accept (read correctly), reject (misread, value optional), or unsure
     corrected_value: float | None = None
     corrected_unit: str = ""
     note: str = ""
+    reviewer: str = ""
 
 
 class MeasureRequest(BaseModel):
@@ -300,9 +312,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @app.post("/api/chat")
     def chat(request: ChatRequest):
         before = state.result(request.profile)
+        if not request.message.strip():
+            raise HTTPException(400, "The message is empty.")
         try:
             reply, facts, dropped = chat_module.respond(state.claude, before, state.history, request.message)
-        except (BudgetExceeded, ModelRefused) as error:
+        except (BudgetExceeded, ModelRefused, AIUnavailable) as error:
             raise HTTPException(503, str(error)) from error
         state.history += [{"role": "engineer", "text": request.message}, {"role": "assistant", "text": reply}]
         state.add_facts(facts)
@@ -311,13 +325,22 @@ def create_app(state: AppState | None = None) -> FastAPI:
     @app.post("/api/upload")
     async def upload(profile: str = Form(...), file: UploadFile = File(...), pages: str = Form("")):
         before = state.result(profile)
-        name = file.filename or "upload"
-        page_list = [int(p) for p in pages.replace(" ", "").split(",") if p.isdigit()] or None
+        name = Path(file.filename or "upload").name
+        data = await file.read(ingest.MAX_UPLOAD_BYTES + 1)  # never hold more than the limit in memory
         try:
+            page_list = ingest.parse_pages(pages)
             facts, cached, dropped = ingest.read_file(state.claude, state.data_dir / "extract-cache",
-                                                      name, await file.read(), page_list)
-        except (BudgetExceeded, ModelRefused, ingest.TooManyPages, ValueError) as error:
+                                                      name, data, page_list, lessons=state.lessons_text())
+        except ingest.FileTooLarge as error:
+            raise HTTPException(413, str(error)) from error
+        except (AIUnavailable, BudgetExceeded) as error:
+            # Missing key, rejected key, no answer after a retry, or the cap: the rest of the app keeps working.
+            raise HTTPException(503, str(error)) from error
+        except (ModelRefused, ingest.TooManyPages, ValueError) as error:
             raise HTTPException(400, str(error)) from error
+        # Keep the file, so a reviewer can see the part of the drawing a value came from.
+        (state.data_dir / "uploads").mkdir(parents=True, exist_ok=True)
+        (state.data_dir / "uploads" / Path(name).name).write_bytes(data)
         known = {(f.subject, f.property, f.value, f.source.file) for f in state.added}
         fresh = [f for f in facts if (f.subject, f.property, f.value, f.source.file) not in known]
         state.add_file(name)
@@ -326,29 +349,84 @@ def create_app(state: AppState | None = None) -> FastAPI:
 
     @app.get("/api/confidence")
     def confidence_status():
-        return state.gate.status()
+        return state.gate.status() | {"lessons": lessons.from_labels(state.gate.pool.rows(),
+                                                                       allow_synthetic=state.gate.allow_synthetic)}
+
+    @app.get("/api/review-queue/{profile_id}")
+    def review_queue(profile_id: str, limit: int = 5):
+        """Fails to review next, most useful for learning first."""
+        result = state.result(profile_id)
+        order = state.gate.review_order(result.findings, state.store(profile_id))
+        return [{"rule_id": f.rule_id, "subject": f.subject, "label": f.label, "measured": f.measured,
+                 "status": f.status, "why_now": why} for f, _score, why in order[:limit]]
+
+    @app.get("/api/evidence")
+    def evidence(file: str, locator: str = ""):
+        """The part of an uploaded drawing that a value was read from, as a PNG."""
+        path = state.data_dir / "uploads" / Path(file).name
+        if not path.exists() or path.suffix.lower() != ".pdf":
+            raise HTTPException(404, "The drawing for this value isn't stored.")
+        png = ingest.crop(path.read_bytes(), locator)
+        if png is None:
+            raise HTTPException(404, "The location of this value isn't known.")
+        return Response(content=png, media_type="image/png")
 
     @app.post("/api/feedback")
     def feedback(request: FeedbackRequest):
-        """An engineer's verdict on a fail. These are the only labels the model ever learns from."""
+        """An engineer's answer: was this value read correctly? These are the only labels the model learns from."""
+        if request.decision not in confidence.DECISIONS:
+            raise HTTPException(422, f"Unknown decision: {request.decision!r}. Use accept, reject, or unsure.")
+        if request.corrected_value is not None and not (request.corrected_value > 0 and is_length_unit(request.corrected_unit)):
+            raise HTTPException(400, "A corrected value must be a positive length with a unit: mm, cm, m, in, or ft.")
         before = state.result(request.profile)
         finding = next((f for f in before.findings if f.rule_id == request.rule_id and f.subject == request.subject
                         and f.reviewable), None)
         if finding is None:
-            raise HTTPException(404, "No reviewable fail matches that rule and subject.")
+            answered = next((r for r in state.gate.pool.rows() if r.get("rule_id") == request.rule_id
+                             and r.get("subject") == request.subject), None)
+            if answered is not None:
+                raise HTTPException(409, f"This finding was already answered ({answered['decision']}) and is no longer "
+                                         "open for review. Undo that answer first to answer again.")
+            raise HTTPException(404, f"No reviewable fail for rule {request.rule_id} and {request.subject}. "
+                                     "Run the checks again: the finding may have changed.")
         try:
             row = confidence.make_label(finding, state.store(request.profile), request.decision,
                                         corrected_value=request.corrected_value,
-                                        corrected_unit=request.corrected_unit, note=request.note)
+                                        corrected_unit=request.corrected_unit, note=request.note,
+                                        reviewer=request.reviewer)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
+        recorded = []
+        if row["corrected_value"] is not None and row["read"]:
+            read = row["read"]
+            recorded = [Fact(subject=read["subject"], property=read["property"], value=row["corrected_value"],
+                             unit=row["corrected_unit"], confidence="high",
+                             source=Source(kind=SourceKind.ENGINEER, file=read["file"],
+                                           locator=f"review of {read['locator'] or read['file'] or 'the reading'}",
+                                           quote=f"{request.reviewer or 'Engineer'}: was read as {read['value']} {read['unit']}"),
+                             meta={"label_key": row["key"]})]
+            state.drop_correction(row["key"])
+            state.add_facts(recorded)
         retrained = state.gate.record(row)
-        return rerun(before, request.profile, retrained=retrained, confidence=state.gate.status())
+        return rerun(before, request.profile, recorded=recorded, retrained=retrained, confidence=state.gate.status())
+
+    @app.delete("/api/feedback")
+    def undo_feedback(profile: str, key: str):
+        """Take an answer back: the label leaves the pool, its correction leaves the facts, the model refits."""
+        before = state.result(profile)
+        if state.gate.undo(key) is None:
+            raise HTTPException(404, "No saved answer has that key.")
+        state.drop_correction(key)
+        return rerun(before, profile, confidence=state.gate.status())
 
     @app.post("/api/measure")
     def measure(profile: str, request: MeasureRequest):
         if state.active_model is None:
             raise HTTPException(400, "There's no 3D model to measure.")
+        if not is_length_unit(request.unit):
+            raise HTTPException(400, f"Unknown unit {request.unit!r}. Use mm, cm, m, in, or ft.")
+        if not request.value > 0:
+            raise HTTPException(400, f"A measured length must be more than 0; got {request.value:g}.")
         before = state.result(profile)
         if not any(p == request.property for _, p, kind, _m in VOCABULARY if kind == "length"):
             raise HTTPException(400, f"Not a measurable property: {request.property}")

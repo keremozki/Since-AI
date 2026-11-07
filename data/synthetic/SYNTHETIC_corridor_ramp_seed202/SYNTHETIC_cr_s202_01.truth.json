@@ -1,0 +1,382 @@
+{
+  "synthetic": true,
+  "SYNTHETIC": "Generated test drawing, not a real ship.",
+  "file": "SYNTHETIC_cr_s202_01.pdf",
+  "generator": "tools/synthetic_corridor_ramp.py",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 400,
+    "flag": "US",
+    "note": "Synthetic passenger ship; PVAG V201.1.1 scope (> 150 passengers) is met."
+  },
+  "limits": {
+    "PVAG-V403.5.1": "36 in (915 mm) min; 32 in (815 mm) under exceptions 1 and 2 (V403.5.1)",
+    "PVAG-V405.2": "1:12 max (V405.2)"
+  },
+  "sheet_unit_note": "mm",
+  "facts": [
+    {
+      "subject": "corridor:C1-1",
+      "property": "clear_width",
+      "value": 0.81,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C1-1  CLEAR WIDTH 0.81 m"
+      }
+    },
+    {
+      "subject": "corridor:C1-2",
+      "property": "clear_width",
+      "value": 1394.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C1-2    1394 mm"
+      }
+    },
+    {
+      "subject": "corridor:C1-4",
+      "property": "clear_width",
+      "value": 0.91,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C1-4    0.91 m"
+      }
+    },
+    {
+      "subject": "corridor:C1-5",
+      "property": "clear_width",
+      "value": 915.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C1-5 | CLR WIDTH 915"
+      }
+    },
+    {
+      "subject": "corridor:C1-6",
+      "property": "clear_width",
+      "value": 1193.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C1-6  CLEAR WIDTH 1193 mm"
+      }
+    },
+    {
+      "subject": "corridor:C1-7",
+      "property": "clear_width",
+      "value": 1455.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C1-7 | CLR WIDTH 1455"
+      }
+    },
+    {
+      "subject": "ramp:R1-1",
+      "property": "slope_run_per_rise",
+      "value": 12.5,
+      "unit": "",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-1  SLOPE 1:12.5"
+      }
+    },
+    {
+      "subject": "ramp:R1-2",
+      "property": "rise",
+      "value": 0.18,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-2  RISE 0.18 m  RUN 2.52 m"
+      }
+    },
+    {
+      "subject": "ramp:R1-2",
+      "property": "run",
+      "value": 2.52,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-2  RISE 0.18 m  RUN 2.52 m"
+      }
+    },
+    {
+      "subject": "ramp:R1-3",
+      "property": "rise",
+      "value": 150.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-3  RISE 150 mm  RUN 1790 mm"
+      }
+    },
+    {
+      "subject": "ramp:R1-3",
+      "property": "run",
+      "value": 1790.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-3  RISE 150 mm  RUN 1790 mm"
+      }
+    },
+    {
+      "subject": "ramp:R1-4",
+      "property": "rise",
+      "value": 6.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-4 | RISE 6\"  RUN 6'-1\""
+      }
+    },
+    {
+      "subject": "ramp:R1-4",
+      "property": "run",
+      "value": 73.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-4 | RISE 6\"  RUN 6'-1\""
+      }
+    },
+    {
+      "subject": "ramp:R1-5",
+      "property": "rise",
+      "value": 0.12,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-5 | RISE 0.12 m  RUN 0.96 m"
+      }
+    },
+    {
+      "subject": "ramp:R1-5",
+      "property": "run",
+      "value": 0.96,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_01.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R1-5 | RISE 0.12 m  RUN 0.96 m"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "subject": "corridor:C1-1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "fail",
+      "violation": true,
+      "case": "just_below_32",
+      "style": "m",
+      "layout": "one_line",
+      "stated": "0.81 m",
+      "true_value_mm": 810.0,
+      "app_has_check": true,
+      "note": "just below 32"
+    },
+    {
+      "subject": "corridor:C1-2",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "mm",
+      "layout": "schedule",
+      "stated": "1394 mm",
+      "true_value_mm": 1394.0,
+      "app_has_check": true,
+      "note": "compliant"
+    },
+    {
+      "subject": "corridor:C1-3",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_missing",
+      "style": "ftin",
+      "layout": "unreadable_missing",
+      "stated": null,
+      "true_value_mm": 1333.5,
+      "app_has_check": true,
+      "note": "unreadable missing"
+    },
+    {
+      "subject": "corridor:C1-4",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": true,
+      "case": "just_below_36",
+      "style": "m",
+      "layout": "schedule",
+      "stated": "0.91 m",
+      "true_value_mm": 910.0,
+      "app_has_check": true,
+      "note": "under 36 in but at least 32 in: V403.5.1 exceptions may apply"
+    },
+    {
+      "subject": "corridor:C1-5",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "just_above_36",
+      "style": "bare",
+      "layout": "two_line",
+      "stated": "915",
+      "true_value_mm": 915.0,
+      "app_has_check": true,
+      "note": "just above 36"
+    },
+    {
+      "subject": "corridor:C1-6",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "mm",
+      "layout": "one_line",
+      "stated": "1193 mm",
+      "true_value_mm": 1193.0,
+      "app_has_check": true,
+      "note": "compliant"
+    },
+    {
+      "subject": "corridor:C1-7",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "bare",
+      "layout": "two_line",
+      "stated": "1455",
+      "true_value_mm": 1455.0,
+      "app_has_check": true,
+      "note": "compliant"
+    },
+    {
+      "subject": "ramp:R1-1",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "just_shallower",
+      "style": "ratio",
+      "stated": "SLOPE 1:12.5",
+      "true_slope": "1:12.5",
+      "app_has_check": true,
+      "note": "just shallower"
+    },
+    {
+      "subject": "ramp:R1-2",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "riserun_m",
+      "stated": "RISE 0.18 m  RUN 2.52 m",
+      "true_slope": "1:14",
+      "app_has_check": true,
+      "note": "compliant"
+    },
+    {
+      "subject": "ramp:R1-3",
+      "rule_id": "PVAG-V405.2",
+      "expected": "fail",
+      "violation": true,
+      "case": "just_steeper",
+      "style": "riserun_mm",
+      "stated": "RISE 150 mm  RUN 1790 mm",
+      "true_slope": "1:11.93",
+      "app_has_check": true,
+      "note": "just steeper"
+    },
+    {
+      "subject": "ramp:R1-4",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "just_shallower",
+      "style": "riserun_in",
+      "stated": "RISE 6\"  RUN 6'-1\"",
+      "true_slope": "1:12.17",
+      "app_has_check": true,
+      "note": "just shallower"
+    },
+    {
+      "subject": "ramp:R1-5",
+      "rule_id": "PVAG-V405.2",
+      "expected": "fail",
+      "violation": true,
+      "case": "violating",
+      "style": "riserun_m",
+      "stated": "RISE 0.12 m  RUN 0.96 m",
+      "true_slope": "1:8",
+      "app_has_check": true,
+      "note": "violating"
+    }
+  ]
+}

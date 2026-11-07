@@ -1,0 +1,243 @@
+{
+  "synthetic": true,
+  "SYNTHETIC": "Generated test drawing, not a real ship.",
+  "file": "SYNTHETIC_cr_s202_02.pdf",
+  "generator": "tools/synthetic_corridor_ramp.py",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 400,
+    "flag": "US",
+    "note": "Synthetic passenger ship; PVAG V201.1.1 scope (> 150 passengers) is met."
+  },
+  "limits": {
+    "PVAG-V403.5.1": "36 in (915 mm) min; 32 in (815 mm) under exceptions 1 and 2 (V403.5.1)",
+    "PVAG-V405.2": "1:12 max (V405.2)"
+  },
+  "sheet_unit_note": null,
+  "facts": [
+    {
+      "subject": "corridor:C2-1",
+      "property": "clear_width",
+      "value": 26.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_02.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C2-1    2'-2\""
+      }
+    },
+    {
+      "subject": "corridor:C2-3",
+      "property": "clear_width",
+      "value": 32.5,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_02.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C2-3  CLEAR WIDTH 2'-8 1/2\""
+      }
+    },
+    {
+      "subject": "corridor:C2-5",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_02.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C2-5    36\""
+      }
+    },
+    {
+      "subject": "ramp:R2-1",
+      "property": "slope_run_per_rise",
+      "value": 12.0,
+      "unit": "",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_02.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R2-1  SLOPE 1:12"
+      }
+    },
+    {
+      "subject": "ramp:R2-5",
+      "property": "rise",
+      "value": 0.12,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_02.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R2-5 | RISE 0.12 m  RUN 1.92 m"
+      }
+    },
+    {
+      "subject": "ramp:R2-5",
+      "property": "run",
+      "value": 1.92,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_02.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R2-5 | RISE 0.12 m  RUN 1.92 m"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "subject": "corridor:C2-1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "fail",
+      "violation": true,
+      "case": "violating",
+      "style": "ftin",
+      "layout": "schedule",
+      "stated": "2'-2\"",
+      "true_value_mm": 660.4,
+      "app_has_check": true,
+      "note": "violating"
+    },
+    {
+      "subject": "corridor:C2-2",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_rotated",
+      "style": "m",
+      "layout": "unreadable_rotated",
+      "stated": "1.03 m",
+      "true_value_mm": 1030.0,
+      "app_has_check": true,
+      "note": "unreadable rotated"
+    },
+    {
+      "subject": "corridor:C2-3",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": true,
+      "case": "just_above_32",
+      "style": "ftin",
+      "layout": "one_line",
+      "stated": "2'-8 1/2\"",
+      "true_value_mm": 825.5,
+      "app_has_check": true,
+      "note": "under 36 in but at least 32 in: V403.5.1 exceptions may apply"
+    },
+    {
+      "subject": "corridor:C2-4",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_ambiguous_unit",
+      "style": "bare",
+      "layout": "unreadable_ambiguous_unit",
+      "stated": "1065",
+      "true_value_mm": 1065.0,
+      "app_has_check": true,
+      "note": "unreadable ambiguous unit"
+    },
+    {
+      "subject": "corridor:C2-5",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "exactly_36",
+      "style": "in",
+      "layout": "schedule",
+      "stated": "36\"",
+      "true_value_mm": 914.4,
+      "app_has_check": true,
+      "note": "exactly 36"
+    },
+    {
+      "subject": "corridor:C2-6",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_ambiguous_unit",
+      "style": "bare",
+      "layout": "unreadable_ambiguous_unit",
+      "stated": "1345",
+      "true_value_mm": 1345.0,
+      "app_has_check": true,
+      "note": "unreadable ambiguous unit"
+    },
+    {
+      "subject": "ramp:R2-1",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "exactly_1_12",
+      "style": "ratio",
+      "stated": "SLOPE 1:12",
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "exactly 1 12"
+    },
+    {
+      "subject": "ramp:R2-2",
+      "rule_id": "PVAG-V405.2",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_ambiguous_unit",
+      "style": "riserun_in",
+      "stated": "RISE 4  RUN 48",
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "unreadable ambiguous unit"
+    },
+    {
+      "subject": "ramp:R2-3",
+      "rule_id": "PVAG-V405.2",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_rotated",
+      "style": "ratio",
+      "stated": "SLOPE 1:12",
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "unreadable rotated"
+    },
+    {
+      "subject": "ramp:R2-4",
+      "rule_id": "PVAG-V405.2",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_ambiguous_unit",
+      "style": "riserun_mm",
+      "stated": "RISE 180  RUN 2160",
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "unreadable ambiguous unit"
+    },
+    {
+      "subject": "ramp:R2-5",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "riserun_m",
+      "stated": "RISE 0.12 m  RUN 1.92 m",
+      "true_slope": "1:16",
+      "app_has_check": true,
+      "note": "compliant"
+    }
+  ]
+}

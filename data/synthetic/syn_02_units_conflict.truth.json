@@ -126,6 +126,20 @@
       "location": null
     },
     {
+      "subject": "corridor:C4-1",
+      "property": "clear_width",
+      "value": 1000.0,
+      "unit": "mm",
+      "source": {
+        "kind": "document",
+        "file": "syn_02_units_conflict.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "CORRIDOR C4-1  CLEAR WIDTH 1000 mm"
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
       "subject": "door-number:407",
       "property": "clear_width",
       "value": 30.0,
@@ -225,7 +239,7 @@
       "expected": "pass",
       "violation": false,
       "note": "compliant",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "1000 mm"
     }
   ]

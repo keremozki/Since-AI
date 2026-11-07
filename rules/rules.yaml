@@ -31,6 +31,36 @@ rules:
       90 degrees. Openings more than 24 inches (610 mm) deep shall provide a clear opening of 36 inches
       (915 mm) minimum.
 
+  - id: PVAG-V403.5.1
+    title: Walking surface clear width
+    area: Accessibility
+    source: PVAG V403.5.1 (proposed, not in force)
+    check: corridor_width
+    params:
+      min_in: 36
+      # Exceptions 1 and 2 allow 32 in. Without segment length or deck area, 32-36 in is "can't tell".
+      reduced_in: 32
+    scope:
+      ship_types: [passenger]
+      min_passengers: 150
+      reason: PVAG V201.1.1 covers passenger vessels permitted to carry more than 150 passengers.
+    quote: >-
+      Except as provided in V403.5.2 and V403.5.3, the clear width of walking surfaces shall be
+      36 inches (915 mm) minimum.
+
+  - id: PVAG-V405.2
+    title: Ramp running slope
+    area: Accessibility
+    source: PVAG V405.2 (proposed, not in force)
+    check: ramp_slope
+    params:
+      max_run_per_rise: 12
+    scope:
+      ship_types: [passenger]
+      min_passengers: 150
+      reason: PVAG V201.1.1 covers passenger vessels permitted to carry more than 150 passengers.
+    quote: Ramp runs shall have a running slope not steeper than 1:12.
+
   - id: FSS-13-STAIR
     title: Escape stair clear width
     area: Escape and evacuation

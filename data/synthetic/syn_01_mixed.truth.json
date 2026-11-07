@@ -110,6 +110,62 @@
       },
       "confidence": "high",
       "location": null
+    },
+    {
+      "subject": "corridor:C3-1",
+      "property": "clear_width",
+      "value": 42.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "CORRIDOR C3-1  CLEAR WIDTH 42\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "corridor:C3-2",
+      "property": "clear_width",
+      "value": 34.0,
+      "unit": "in",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "CORRIDOR C3-2  CLEAR WIDTH 34\""
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "ramp:R3-1",
+      "property": "slope_run_per_rise",
+      "value": 12.0,
+      "unit": "",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "RAMP R3-1 1:12"
+      },
+      "confidence": "high",
+      "location": null
+    },
+    {
+      "subject": "ramp:R3-2",
+      "property": "slope_run_per_rise",
+      "value": 10.0,
+      "unit": "",
+      "source": {
+        "kind": "document",
+        "file": "syn_01_mixed.pdf",
+        "locator": "page 1, deck plan",
+        "quote": "RAMP R3-2 1:10"
+      },
+      "confidence": "high",
+      "location": null
     }
   ],
   "expected": [
@@ -183,16 +239,16 @@
       "expected": "pass",
       "violation": false,
       "note": "compliant",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "42\""
     },
     {
       "subject": "corridor:C3-2",
       "rule_id": "PVAG-V403.5.1",
-      "expected": "fail",
+      "expected": "cant_tell",
       "violation": true,
-      "note": "INJECTED: too narrow",
-      "app_has_check": false,
+      "note": "INJECTED: too narrow (32 to 36 in: V403.5.1 exceptions may apply, so can't tell)",
+      "app_has_check": true,
       "stated": "34\""
     },
     {
@@ -201,7 +257,7 @@
       "expected": "pass",
       "violation": false,
       "note": "compliant, exactly at limit",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "1:12"
     },
     {
@@ -210,7 +266,7 @@
       "expected": "fail",
       "violation": true,
       "note": "INJECTED: too steep",
-      "app_has_check": false,
+      "app_has_check": true,
       "stated": "1:10"
     }
   ]

@@ -30,9 +30,13 @@ export interface Finding {
   p_real: number | null;
   gate_note: string;
   reviewable: boolean;
+  read_quote: string;
+  read_file: string;
+  read_locator: string;
 }
 
-export type Decision = "accept" | "reject" | "correct";
+/** accept = read correctly, reject = misread (value optional), unsure = no label. */
+export type Decision = "accept" | "reject" | "unsure";
 
 export interface FeedbackBody {
   rule_id: string;
@@ -40,6 +44,51 @@ export interface FeedbackBody {
   decision: Decision;
   corrected_value?: number;
   corrected_unit?: string;
+  reviewer?: string;
+}
+
+export interface SavedAnswer {
+  key: string;
+  decision: Decision;
+  subject: string;
+  measured: string;
+  corrected_value: number | null;
+  corrected_unit: string;
+  reviewer: string;
+  created: string;
+  synthetic: boolean;
+}
+
+export interface Lesson {
+  quote: string;
+  subject: string;
+  property: string;
+  read: string;
+  right: string | null;
+}
+
+export interface ConfidenceStatus {
+  mode: "cold_start" | "model" | "simulated";
+  reason: string;
+  tau: number;
+  min_labels: number;
+  min_per_class: number;
+  labels_used: number;
+  labels_read_correctly: number;
+  labels_misread: number;
+  labels_unsure: number;
+  recent: SavedAnswer[];
+  lessons: Lesson[];
+  model: { version: number; n_labels: number; n_synthetic: number } | null;
+}
+
+export interface QueueItem {
+  rule_id: string;
+  subject: string;
+  label: string;
+  measured: string;
+  status: Status;
+  why_now: string;
 }
 
 export interface ScopeDecision {
@@ -152,6 +201,12 @@ export const api = {
     jsonPost(`/api/measure?profile=${encodeURIComponent(profile)}`, body).then((r) => parse<UpdateResponse>(r)),
   feedback: (profile: string, body: FeedbackBody) =>
     jsonPost("/api/feedback", { profile, ...body }).then((r) => parse<UpdateResponse>(r)),
+  undoFeedback: (profile: string, key: string) =>
+    fetch(`/api/feedback?profile=${encodeURIComponent(profile)}&key=${encodeURIComponent(key)}`, { method: "DELETE" }).then((r) => parse<UpdateResponse>(r)),
+  confidence: () => fetch("/api/confidence").then((r) => parse<ConfidenceStatus>(r)),
+  reviewQueue: (profile: string) => fetch(`/api/review-queue/${profile}`).then((r) => parse<QueueItem[]>(r)),
+  evidenceUrl: (file: string, locator: string) =>
+    `/api/evidence?file=${encodeURIComponent(file)}&locator=${encodeURIComponent(locator)}`,
   reset: () => fetch("/api/reset", { method: "POST" }).then((r) => parse<{ ok: boolean }>(r)),
   inputs: () => fetch("/api/inputs").then((r) => parse<Inputs>(r)),
   removeModel: (profile: string) =>

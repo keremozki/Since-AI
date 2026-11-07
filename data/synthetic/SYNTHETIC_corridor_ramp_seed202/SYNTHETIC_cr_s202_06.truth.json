@@ -1,0 +1,354 @@
+{
+  "synthetic": true,
+  "SYNTHETIC": "Generated test drawing, not a real ship.",
+  "file": "SYNTHETIC_cr_s202_06.pdf",
+  "generator": "tools/synthetic_corridor_ramp.py",
+  "profile": {
+    "ship_type": "passenger",
+    "passengers": 400,
+    "flag": "US",
+    "note": "Synthetic passenger ship; PVAG V201.1.1 scope (> 150 passengers) is met."
+  },
+  "limits": {
+    "PVAG-V403.5.1": "36 in (915 mm) min; 32 in (815 mm) under exceptions 1 and 2 (V403.5.1)",
+    "PVAG-V405.2": "1:12 max (V405.2)"
+  },
+  "sheet_unit_note": null,
+  "facts": [
+    {
+      "subject": "corridor:C6-1",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C6-1    36\""
+      }
+    },
+    {
+      "subject": "corridor:C6-2",
+      "property": "clear_width",
+      "value": 36.125,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C6-2 | CLR WIDTH 36 1/8\""
+      }
+    },
+    {
+      "subject": "corridor:C6-3",
+      "property": "clear_width",
+      "value": 36.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C6-3    3'-0\""
+      }
+    },
+    {
+      "subject": "corridor:C6-6",
+      "property": "clear_width",
+      "value": 46.0,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, corridor label",
+        "quote": "CORRIDOR C6-6 | CLR WIDTH 3'-10\""
+      }
+    },
+    {
+      "subject": "corridor:C6-7",
+      "property": "clear_width",
+      "value": 34.5,
+      "unit": "in",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, corridor schedule",
+        "quote": "C6-7    2'-10 1/2\""
+      }
+    },
+    {
+      "subject": "ramp:R6-1",
+      "property": "rise",
+      "value": 0.15,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-1 | RISE 0.15 m  RUN 2.10 m"
+      }
+    },
+    {
+      "subject": "ramp:R6-1",
+      "property": "run",
+      "value": 2.1,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-1 | RISE 0.15 m  RUN 2.10 m"
+      }
+    },
+    {
+      "subject": "ramp:R6-2",
+      "property": "rise",
+      "value": 120.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-2  RISE 120 mm  RUN 1440 mm"
+      }
+    },
+    {
+      "subject": "ramp:R6-2",
+      "property": "run",
+      "value": 1440.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-2  RISE 120 mm  RUN 1440 mm"
+      }
+    },
+    {
+      "subject": "ramp:R6-3",
+      "property": "rise",
+      "value": 180.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-3 | RISE 180 mm  RUN 2170 mm"
+      }
+    },
+    {
+      "subject": "ramp:R6-3",
+      "property": "run",
+      "value": 2170.0,
+      "unit": "mm",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-3 | RISE 180 mm  RUN 2170 mm"
+      }
+    },
+    {
+      "subject": "ramp:R6-5",
+      "property": "rise",
+      "value": 0.12,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-5 | RISE 0.12 m  RUN 1.44 m"
+      }
+    },
+    {
+      "subject": "ramp:R6-5",
+      "property": "run",
+      "value": 1.44,
+      "unit": "m",
+      "confidence": "high",
+      "location": null,
+      "source": {
+        "kind": "document",
+        "file": "SYNTHETIC_cr_s202_06.pdf",
+        "locator": "page 1, ramp label",
+        "quote": "RAMP R6-5 | RISE 0.12 m  RUN 1.44 m"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "subject": "corridor:C6-1",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "exactly_36",
+      "style": "in",
+      "layout": "schedule",
+      "stated": "36\"",
+      "true_value_mm": 914.4,
+      "app_has_check": true,
+      "note": "exactly 36"
+    },
+    {
+      "subject": "corridor:C6-2",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "just_above_36",
+      "style": "in",
+      "layout": "two_line",
+      "stated": "36 1/8\"",
+      "true_value_mm": 917.58,
+      "app_has_check": true,
+      "note": "just above 36"
+    },
+    {
+      "subject": "corridor:C6-3",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "exactly_36",
+      "style": "ftin",
+      "layout": "schedule",
+      "stated": "3'-0\"",
+      "true_value_mm": 914.4,
+      "app_has_check": true,
+      "note": "exactly 36"
+    },
+    {
+      "subject": "corridor:C6-4",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_missing",
+      "style": "ftin",
+      "layout": "unreadable_missing",
+      "stated": null,
+      "true_value_mm": 1447.8,
+      "app_has_check": true,
+      "note": "unreadable missing"
+    },
+    {
+      "subject": "corridor:C6-5",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": true,
+      "case": "unreadable_missing",
+      "style": "ftin",
+      "layout": "unreadable_missing",
+      "stated": null,
+      "true_value_mm": 901.7,
+      "app_has_check": true,
+      "note": "unreadable missing"
+    },
+    {
+      "subject": "corridor:C6-6",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "ftin",
+      "layout": "two_line",
+      "stated": "3'-10\"",
+      "true_value_mm": 1168.4,
+      "app_has_check": true,
+      "note": "compliant"
+    },
+    {
+      "subject": "corridor:C6-7",
+      "rule_id": "PVAG-V403.5.1",
+      "expected": "cant_tell",
+      "violation": true,
+      "case": "exception_band",
+      "style": "ftin",
+      "layout": "schedule",
+      "stated": "2'-10 1/2\"",
+      "true_value_mm": 876.3,
+      "app_has_check": true,
+      "note": "under 36 in but at least 32 in: V403.5.1 exceptions may apply"
+    },
+    {
+      "subject": "ramp:R6-1",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "compliant",
+      "style": "riserun_m",
+      "stated": "RISE 0.15 m  RUN 2.10 m",
+      "true_slope": "1:14",
+      "app_has_check": true,
+      "note": "compliant"
+    },
+    {
+      "subject": "ramp:R6-2",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "exactly_1_12",
+      "style": "riserun_mm",
+      "stated": "RISE 120 mm  RUN 1440 mm",
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "exactly 1 12"
+    },
+    {
+      "subject": "ramp:R6-3",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "just_shallower",
+      "style": "riserun_mm",
+      "stated": "RISE 180 mm  RUN 2170 mm",
+      "true_slope": "1:12.06",
+      "app_has_check": true,
+      "note": "just shallower"
+    },
+    {
+      "subject": "ramp:R6-4",
+      "rule_id": "PVAG-V405.2",
+      "expected": "cant_tell",
+      "violation": false,
+      "case": "unreadable_missing",
+      "style": "riserun_mm",
+      "stated": null,
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "unreadable missing"
+    },
+    {
+      "subject": "ramp:R6-5",
+      "rule_id": "PVAG-V405.2",
+      "expected": "pass",
+      "violation": false,
+      "case": "exactly_1_12",
+      "style": "riserun_m",
+      "stated": "RISE 0.12 m  RUN 1.44 m",
+      "true_slope": "1:12",
+      "app_has_check": true,
+      "note": "exactly 1 12"
+    }
+  ]
+}

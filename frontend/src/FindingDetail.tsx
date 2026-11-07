@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Decision, Finding } from "./api";
+import { api, Decision, Finding } from "./api";
 import { STATUS_LABEL, StatusIcon } from "./shared";
+
+const TO_MM: Record<string, number> = { mm: 1, in: 25.4, m: 1000, ft: 304.8 };
 
 export default function FindingDetail({ finding, onClose, onAnswer, onReview }: {
   finding: Finding;
@@ -10,6 +12,10 @@ export default function FindingDetail({ finding, onClose, onAnswer, onReview }: 
 }) {
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState("mm");
+  const [misread, setMisread] = useState(false);
+  const [cropOk, setCropOk] = useState(true);
+  const number = Number(value);
+  const inMm = value && Number.isFinite(number) ? number * TO_MM[unit] : null;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -54,16 +60,34 @@ export default function FindingDetail({ finding, onClose, onAnswer, onReview }: 
 
       {finding.reviewable && (
         <div className="review" aria-label="Engineer review">
-          <p>Is this fail real? Your answer trains the confidence model.</p>
-          <button type="button" onClick={() => onReview(finding, "accept")}>Accept: real fail</button>
-          <button type="button" onClick={() => onReview(finding, "reject")}>Reject: misread</button>
-          <span>
-            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Correct value" aria-label="Correct value" />
-            <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
-              <option>mm</option><option>in</option><option>m</option><option>ft</option>
-            </select>
-            <button type="button" disabled={!value} onClick={() => { onReview(finding, "correct", Number(value), unit); setValue(""); }}>Correct</button>
-          </span>
+          <p><strong>Was this value read correctly from the drawing?</strong> You judge the reading, not the ship. Your answer trains the confidence model.</p>
+          {(finding.read_quote || finding.read_file) && (
+            <p className="read-from">Read from {finding.read_file || "the input"}{finding.read_locator ? `, ${finding.read_locator}` : ""}
+              {finding.read_quote && <>: <q>{finding.read_quote}</q></>}</p>
+          )}
+          {finding.read_file.toLowerCase().endsWith(".pdf") && finding.read_locator && cropOk && (
+            <img className="evidence" alt={`The drawing where ${finding.measured} was read`} onError={() => setCropOk(false)}
+              src={api.evidenceUrl(finding.read_file, finding.read_locator)} />
+          )}
+          <div className="review-actions">
+            <button type="button" onClick={() => onReview(finding, "accept")}>Read correctly</button>
+            <button type="button" aria-expanded={misread} onClick={() => setMisread(!misread)}>Misread</button>
+            <button type="button" onClick={() => onReview(finding, "unsure")}>Not sure</button>
+          </div>
+          {misread && (
+            <div className="misread">
+              <label>Right value (optional)
+                <input type="number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="If known" />
+              </label>
+              <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
+                <option>mm</option><option>in</option><option>m</option><option>ft</option>
+              </select>
+              {inMm !== null && unit !== "mm" && <small>= {inMm.toFixed(1)} mm</small>}
+              <button type="button" onClick={() => onReview(finding, "reject", inMm !== null ? number : undefined, inMm !== null ? unit : undefined)}>
+                {inMm !== null ? "Save misread and the right value" : "Save misread"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

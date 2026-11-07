@@ -1,6 +1,7 @@
 """The fixed list of facts that AI may report. Anything else is dropped by code."""
 from __future__ import annotations
 
+import math
 import re
 
 from .models import Fact, Source
@@ -11,6 +12,12 @@ VOCABULARY = [
     (r"door-number:\d+", "clear_width", "length", "clear opening width of the door with this number"),
     (r"door-number:\d+", "shown_on", "text", "sheet or page where the door is tagged, when no width is written for it"),
     (r"door-type:.+", "clear_width", "length", "clear opening width for a door part type, by its exact name"),
+    (r"corridor:.+", "clear_width", "length", "clear width of a corridor or walking surface, by its label on the drawing"),
+    (r"corridor:.+", "shown_on", "text", "sheet or page where the corridor is labelled, when no width is written for it"),
+    (r"ramp:.+", "shown_on", "text", "sheet or page where the ramp is labelled, when no slope or rise and run is written for it"),
+    (r"ramp:.+", "rise", "length", "vertical rise of a ramp run"),
+    (r"ramp:.+", "run", "length", "horizontal length of a ramp run"),
+    (r"ramp:.+", "slope_run_per_rise", "number", "N from a slope written 1:N on the drawing. Only if written, never computed"),
     (r"liferaft", "capacity_persons", "number", "rated capacity of each liferaft, in persons"),
     (r"ship", "persons_on_board", "number", "total persons the ship carries, only if stated as one total"),
     (r"ship", "crew_complement", "number", "number of crew, as stated, or crew berths if only those are given"),
@@ -47,7 +54,7 @@ FACT_SCHEMA = {
 def vocabulary_text() -> str:
     lines = []
     for subject, prop, _kind, meaning in VOCABULARY:
-        shown = subject.replace(r"\d+", "<number>").replace(".+", "<exact part type name>")
+        shown = subject.replace(r"\d+", "<number>").replace("door-type:.+", "door-type:<exact part type name>").replace(".+", "<label on the drawing>")
         lines.append(f"- subject {shown}, property {prop}: {meaning}")
     return "\n".join(lines)
 
@@ -69,8 +76,11 @@ def to_fact(raw: dict, source_template: Source) -> Fact | None:
         value = number
         if value is None or isinstance(value, bool):
             return None
-        value = float(value)
-        if value <= 0:
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(value) or value <= 0:
             return None
     if kind == "length" and not is_length_unit(unit):
         return None

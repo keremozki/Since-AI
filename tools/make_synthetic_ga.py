@@ -5,10 +5,12 @@ Every plan gets a truth file in data/synthetic/: the facts a perfect reader woul
 
 Limits come only from verified rule texts in docs/rules (PVAG, proposed, not in force):
   door clear width   >= 32 in (815 mm)   PVAG V404.2.3  (checked by the app: door_clear_width)
-  walking surface    >= 36 in (915 mm)   PVAG V403.5.1  (no check in the app yet)
-  ramp running slope <= 1:12             PVAG V405.2    (no check in the app yet)
+  walking surface    >= 36 in (915 mm)   PVAG V403.5.1  (corridor_width; the three plans below predate it)
+  ramp running slope <= 1:12             PVAG V405.2    (ramp_slope; the three plans below predate it)
 
 Usage: python tools/make_synthetic_ga.py   (writes data/synthetic/*.pdf and *.truth.json)
+       python tools/make_synthetic_ga.py --corridor-ramp-seed 101
+           (seeded SYNTHETIC corridor and ramp set, see tools/synthetic_corridor_ramp.py)
 """
 from __future__ import annotations
 
@@ -155,14 +157,22 @@ def draw_plan(plan: dict, pdf_path: Path) -> list[dict]:
             facts.append({"subject": f"door-number:{number}", "property": "clear_width", "value": value, "unit": unit,
                           "source": {"kind": "document", "file": pdf_path.name, "locator": "page 1, deck plan",
                                      "quote": f"D{number} CL OPG {label}"}, "confidence": "high", "location": None})
-    # corridor and ramp labels (no app check yet, kept for future checks)
+    # corridor and ramp labels (checked by corridor_width and ramp_slope)
     c.setFont("Helvetica", 8)
     for j, (cid, width, _n) in enumerate(plan["corridors"]):
-        c.drawString(x0 + 10 * MM + j * 120 * MM, (cy0 + cy1) / 2 - 1 * MM, f"CORRIDOR {cid}  CLEAR WIDTH {width}")
+        quote = f"CORRIDOR {cid}  CLEAR WIDTH {width}"
+        c.drawString(x0 + 10 * MM + j * 120 * MM, (cy0 + cy1) / 2 - 1 * MM, quote)
+        value, unit = unit_value(width)
+        facts.append({"subject": f"corridor:{cid}", "property": "clear_width", "value": value, "unit": unit,
+                      "source": {"kind": "document", "file": pdf_path.name, "locator": "page 1, deck plan", "quote": quote},
+                      "confidence": "high", "location": None})
     for j, (rid, slope, _n) in enumerate(plan["ramps"]):
         rx = x1 - 60 * MM - j * 50 * MM
         c.rect(rx, cy1 + 2 * MM, 30 * MM, 8 * MM)
         c.drawString(rx + 1 * MM, cy1 + 5 * MM, f"RAMP {rid} {slope}")
+        facts.append({"subject": f"ramp:{rid}", "property": "slope_run_per_rise", "value": float(slope.split(":")[1]),
+                      "unit": "", "source": {"kind": "document", "file": pdf_path.name, "locator": "page 1, deck plan",
+                                             "quote": f"RAMP {rid} {slope}"}, "confidence": "high", "location": None})
     # optional door schedule table
     if plan["schedule"]:
         tx, ty = 120 * MM, h - 22 * MM
@@ -194,18 +204,32 @@ def expected_results(plan: dict) -> list[dict]:
         rows.append({"subject": f"door-number:{number}", "rule_id": DOOR_RULE, "expected": status,
                      "violation": status != "pass", "note": note, "app_has_check": True})
     for cid, width, note in plan["corridors"]:
-        ok = to_in(width) >= 36 - 1e-6
-        rows.append({"subject": f"corridor:{cid}", "rule_id": CORRIDOR_RULE, "expected": "pass" if ok else "fail",
-                     "violation": not ok, "note": note, "app_has_check": False, "stated": width})
+        # V403.5.1: 36 in minimum; exceptions 1 and 2 allow 32 in, which needs data a plan doesn't give.
+        inches = to_in(width)
+        status = "pass" if inches >= 36 - 1e-6 else ("cant_tell" if inches >= 32 - 1e-6 else "fail")
+        if status == "cant_tell":
+            note += " (32 to 36 in: V403.5.1 exceptions may apply, so can't tell)"
+        rows.append({"subject": f"corridor:{cid}", "rule_id": CORRIDOR_RULE, "expected": status,
+                     "violation": inches < 36 - 1e-6, "note": note, "app_has_check": True, "stated": width})
     for rid, slope, note in plan["ramps"]:
         run = float(slope.split(":")[1])
         ok = run >= 12
         rows.append({"subject": f"ramp:{rid}", "rule_id": RAMP_RULE, "expected": "pass" if ok else "fail",
-                     "violation": not ok, "note": note, "app_has_check": False, "stated": slope})
+                     "violation": not ok, "note": note, "app_has_check": True, "stated": slope})
     return rows
 
 
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--corridor-ramp-seed", type=int, help="write a seeded SYNTHETIC corridor and ramp set instead")
+    parser.add_argument("--sheets", type=int, default=6)
+    args = parser.parse_args()
+    if args.corridor_ramp_seed is not None:
+        from synthetic_corridor_ramp import make_corridor_ramp_set
+        folder = make_corridor_ramp_set(args.corridor_ramp_seed, OUT, args.sheets)
+        print("wrote", folder.relative_to(ROOT))
+        return
     OUT.mkdir(parents=True, exist_ok=True)
     for plan in PLANS:
         pdf = OUT / f"{plan['name']}.pdf"

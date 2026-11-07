@@ -220,7 +220,7 @@ def rules():
 def test_scope_excludes_passenger_rules_for_the_research_vessel():
     result = run(FactStore(), rules(), PROFILES["rcrv"])
     excluded = {d.rule_id for d in result.scope if not d.applies}
-    assert excluded == {"PVAG-V404.2.3", "FSS-13-STAIR", "MSC.1-CIRC.1533"}
+    assert excluded == {"PVAG-V404.2.3", "PVAG-V403.5.1", "PVAG-V405.2", "FSS-13-STAIR", "MSC.1-CIRC.1533"}
     assert not any(f.rule_id in excluded for f in result.findings)
 
 
@@ -273,7 +273,7 @@ def test_stair_label_names_the_fss_code():
 
 def test_door_and_masthead_limits_are_confirmed_by_the_rule_texts():
     verified = {rule.id for rule in rules() if rule.verified}
-    assert verified == {"PVAG-V404.2.3", "COLREG-ANNEX-I"}
+    assert verified == {"PVAG-V404.2.3", "PVAG-V403.5.1", "PVAG-V405.2", "COLREG-ANNEX-I"}
 
 
 def test_narrow_door_to_a_stairway_is_cant_tell_under_the_exception():
@@ -301,3 +301,43 @@ def test_a_quote_found_in_the_rule_text_verifies_the_rule(tmp_path):
     (texts / "ada.md").write_text("Door openings shall provide 32 inches\nminimum clear width.", encoding="utf-8")
     loaded = load_rules(rule_file, texts)
     assert [rule.verified for rule in loaded] == [True, False]
+
+
+CORRIDOR_RULE = Rule(id="C", title="Corridor", area="A", source="S", check="corridor_width", params={"min_in": 36, "reduced_in": 32})
+RAMP_RULE = Rule(id="RP", title="Ramp", area="A", source="S", check="ramp_slope", params={"max_run_per_rise": 12})
+
+
+def corridor(width, unit="in", confidence="high"):
+    from app.checks import check_corridor_width
+    f = fact("corridor:A", "clear_width", width, unit)
+    f.confidence = confidence
+    return check_corridor_width(CORRIDOR_RULE, FactStore([f]), PASSENGER)[0]
+
+
+def ramp(*facts):
+    from app.checks import check_ramp_slope
+    return check_ramp_slope(RAMP_RULE, FactStore(list(facts)), PASSENGER)[0]
+
+
+def test_corridor_statuses():
+    assert corridor(36).status == Status.PASS
+    assert corridor(915, "mm").status == Status.PASS
+    assert corridor(34).status == Status.CANT_TELL
+    assert corridor(30).status == Status.FAIL and corridor(30).gap.startswith("6.0 in")
+    assert corridor(40, confidence="low").status == Status.CANT_TELL
+
+
+def test_corridor_missing_data_is_cant_tell():
+    from app.checks import check_corridor_width
+    assert check_corridor_width(CORRIDOR_RULE, FactStore(), PASSENGER)[0].status == Status.CANT_TELL
+
+
+def test_ramp_slope_from_rise_and_run():
+    assert ramp(fact("ramp:R1", "rise", 5, "in"), fact("ramp:R1", "run", 60, "in")).status == Status.PASS
+    assert ramp(fact("ramp:R1", "rise", 6, "in"), fact("ramp:R1", "run", 60, "in")).status == Status.FAIL
+    assert ramp(fact("ramp:R1", "rise", 5, "in")).status == Status.CANT_TELL
+
+
+def test_ramp_slope_from_written_ratio():
+    assert ramp(fact("ramp:R1", "slope_run_per_rise", 12)).status == Status.PASS
+    assert ramp(fact("ramp:R1", "slope_run_per_rise", 10)).status == Status.FAIL

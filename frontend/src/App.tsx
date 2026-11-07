@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, Decision, Finding, Inputs, Profile, RunResult, Spend, UpdateResponse } from "./api";
+import { api, ConfidenceStatus, Decision, Finding, Inputs, Profile, QueueItem, RunResult, Spend, UpdateResponse } from "./api";
 import Assistant, { ChatLine } from "./Assistant";
 import FindingDetail from "./FindingDetail";
 import InputsPanel from "./InputsPanel";
 import MeasurePanel from "./MeasurePanel";
 import Results from "./Results";
+import ReviewPanel from "./ReviewPanel";
 import ShipViewer, { Measurement } from "./ShipViewer";
 
-type Tab = "assistant" | "inputs";
+type Tab = "assistant" | "inputs" | "review";
+
+const SAID: Record<Decision, string> = { accept: "read correctly", reject: "misread", unsure: "not sure (not used for training)" };
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -23,6 +26,17 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("assistant");
   const [question, setQuestion] = useState("");
   const [inputsNote, setInputsNote] = useState("");
+  const [learning, setLearning] = useState<ConfidenceStatus | null>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [reviewer, setReviewer] = useState(() => { try { return localStorage.getItem("reviewer") ?? ""; } catch { return ""; } });
+
+  const refreshLearning = useCallback(async (id: string) => {
+    try {
+      const [status, next] = await Promise.all([api.confidence(), api.reviewQueue(id)]);
+      setLearning(status);
+      setQueue(next);
+    } catch { /* the panel just stays as it was */ }
+  }, []);
 
   const refresh = useCallback(async (id: string) => {
     setError("");
@@ -31,10 +45,11 @@ export default function App() {
       setResult(next);
       setSpend(nextSpend);
       setInputs(nextInputs);
+      refreshLearning(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The checks couldn't run.");
     }
-  }, []);
+  }, [refreshLearning]);
 
   useEffect(() => { api.profiles().then(setProfiles).catch(() => setError("Can't reach the backend. Is it running?")); }, []);
   useEffect(() => { setSelected(null); refresh(profileId); }, [profileId, refresh]);
@@ -51,7 +66,8 @@ export default function App() {
     if (update.dropped) notes.push({ role: "system", text: `${update.dropped} value(s) were rejected because they didn't fit a known fact.` });
     if (update.changes.length) notes.push({ role: "system", text: `Checks rerun. What changed:\n${update.changes.join("\n")}` });
     setLines((current) => [...current, ...notes]);
-  }, []);
+    refreshLearning(profileId);
+  }, [profileId, refreshLearning]);
 
   const onInputsDone = useCallback((update: UpdateResponse, intro: string) => {
     setMeasuring(false);
@@ -63,15 +79,32 @@ export default function App() {
     setError("");
     try {
       const update = await api.feedback(profileId, { rule_id: finding.rule_id, subject: finding.subject, decision,
-                                                     corrected_value: value, corrected_unit: unit });
+                                                     corrected_value: value, corrected_unit: unit, reviewer });
       applyUpdate(update, "");
       const retrained = update.retrained ? " The confidence model was retrained." : "";
-      setLines((current) => [...current, { role: "system", text: `Review saved for ${finding.label}: ${decision}.${retrained}` }]);
-      setTab("assistant");
+      setLines((current) => [...current, { role: "system", text: `Answer saved for ${finding.label}: ${SAID[decision]}.${retrained}` }]);
+      setTab("review");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The review couldn't be saved.");
+      setError(e instanceof Error ? e.message : "The answer couldn't be saved.");
+    }
+  }, [profileId, applyUpdate, reviewer]);
+
+  const undo = useCallback(async (key: string) => {
+    setError("");
+    try {
+      applyUpdate(await api.undoFeedback(profileId, key), "");
+      setLines((current) => [...current, { role: "system", text: "Answer taken back. The model refits without it." }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The answer couldn't be taken back.");
     }
   }, [profileId, applyUpdate]);
+
+  const nameReviewer = (name: string) => {
+    setReviewer(name);
+    try { localStorage.setItem("reviewer", name); } catch { /* not saved, still used */ }
+  };
+  const pick = (item: QueueItem) =>
+    setSelected(result?.findings.find((f) => f.rule_id === item.rule_id && f.subject === item.subject) ?? null);
 
   const startOver = async () => {
     await api.reset();
@@ -105,6 +138,11 @@ export default function App() {
           <a className="button" href={`/api/report/${profileId}`} target="_blank" rel="noreferrer">Text report</a>
         </div>
       </header>
+      {learning?.mode === "simulated" && (
+        <p className="simulated" role="status">
+          SIMULATED LABELS: the confidence model running now learned from {learning.model?.n_synthetic} simulated answers, not from engineers.
+        </p>
+      )}
       {error && (
         <div className="error" role="alert">
           <span>{error}</span>
@@ -130,6 +168,7 @@ export default function App() {
             <button type="button" role="tab" aria-selected={tab === "inputs"} onClick={() => setTab("inputs")}>
               Inputs{inputs ? ` (${(inputs.model.active ? 1 : 0) + inputs.files.length})` : ""}
             </button>
+            <button type="button" role="tab" aria-selected={tab === "review"} onClick={() => setTab("review")}>Review</button>
           </div>
           <div className="tab-body" hidden={tab !== "assistant"}>
             <Assistant profileId={profileId} lines={lines} setLines={setLines} onDone={applyUpdate}
@@ -137,6 +176,9 @@ export default function App() {
           </div>
           <div className="tab-body" hidden={tab !== "inputs"}>
             <InputsPanel profileId={profileId} inputs={inputs} result={result} note={inputsNote} onDone={onInputsDone} onError={setError} onStartOver={startOver} />
+          </div>
+          <div className="tab-body" hidden={tab !== "review"}>
+            <ReviewPanel status={learning} queue={queue} reviewer={reviewer} onReviewer={nameReviewer} onPick={pick} onUndo={undo} />
           </div>
         </aside>
       </main>
